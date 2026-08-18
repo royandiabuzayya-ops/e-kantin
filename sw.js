@@ -1,9 +1,13 @@
-// Service Worker sederhana untuk E-Kantin Cerdas.
-// Strategi: cache-first untuk file aplikasi sendiri (app shell), supaya
-// aplikasi tetap bisa dibuka meski HP sedang offline. Data transaksi
-// sendiri tetap disimpan di localStorage (tidak lewat sini).
-
-const CACHE_NAME = 'ekantin-cache-v1';
+// Service Worker untuk E-Kantin Cerdas.
+// Strategi: NETWORK-FIRST untuk file aplikasi sendiri (app shell) - selalu
+// coba ambil versi terbaru dulu saat online, baru fallback ke cache kalau
+// offline. Ini penting karena aplikasi masih aktif dikembangkan/diperbarui;
+// strategi cache-first (versi lama) membuat HP bisa "terjebak" memakai versi
+// lama selamanya walau file terbaru sudah di-upload ke hosting.
+//
+// CACHE_NAME dinaikkan setiap ada perubahan berarti pada file ini supaya
+// versi cache lama otomatis dibersihkan (lihat 'activate' di bawah).
+const CACHE_NAME = 'ekantin-cache-v2';
 const APP_SHELL = [
   './index.html',
   './manifest.json',
@@ -32,22 +36,25 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   // Hanya tangani request GET dari origin yang sama (app shell).
   // Request ke CDN (Tailwind/Fonts) atau ke Google Apps Script (sync)
-  // dibiarkan lewat jaringan seperti biasa.
+  // dibiarkan lewat jaringan seperti biasa (tidak disentuh Service Worker ini).
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
 
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request)
-        .then((response) => {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          return response;
-        })
-        .catch(() => cached);
-    })
+    fetch(event.request, { cache: 'no-store' })
+      .then((response) => {
+        // Berhasil dari jaringan (online): simpan salinan terbaru ke cache
+        // untuk cadangan offline nanti, lalu kembalikan versi terbaru ini.
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        return response;
+      })
+      .catch(() => {
+        // Gagal (offline/tidak ada koneksi): baru pakai salinan cache lama
+        // sebagai fallback, supaya aplikasi tetap bisa dibuka offline.
+        return caches.match(event.request);
+      })
   );
 });

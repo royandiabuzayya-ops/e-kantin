@@ -1072,6 +1072,7 @@ function doGet(e) {
             autoSyncEnabled: true,
             pendingSync: false,
             lastSyncDate: null,
+            lastSyncedHash: null,
             lastStokPagiDate: null,
             schoolName: '',
             modalAwalLocked: false,
@@ -3147,6 +3148,35 @@ function doGet(e) {
             };
         }
 
+        // Hash sederhana (non-kriptografis) buat mendeteksi APAKAH data yang mau
+        // disinkronkan benar-benar berubah dibanding sinkronisasi terakhir yang
+        // berhasil. Tujuannya murni efisiensi (hindari kirim data yang sama
+        // berulang-ulang), bukan keamanan - makanya algoritma sederhana (djb2)
+        // sudah cukup, tidak perlu SHA/MD5 yang lebih berat.
+        function computeSyncHash(payload) {
+            const str = JSON.stringify(payload);
+            let hash = 5381;
+            for (let i = 0; i < str.length; i++) {
+                hash = ((hash << 5) + hash) + str.charCodeAt(i);
+                hash |= 0;
+            }
+            return hash.toString(36) + '_' + str.length;
+        }
+
+        function buildSyncPayload() {
+            return {
+                modal: appData.modalKas,
+                commissionRate: appData.commissionRate,
+                items: appData.items, // Kirim semuanya, termasuk tombstone (deleted: true)
+                masterTitipan: appData.masterTitipan || [],
+                expensesOp: appData.expensesOp,
+                expensesStock: appData.expensesStock,
+                salesHistory: appData.salesHistory,
+                payouts: appData.payouts || [],
+                otherIncome: appData.otherIncome || []
+            };
+        }
+
         async function performSync(silent) {
             if (!appData.sheetUrl) {
                 if (!silent) {
@@ -3156,6 +3186,18 @@ function doGet(e) {
                 return false;
             }
             if (syncInProgress) return false;
+
+            // Cek dulu: kalau data lokal PERSIS sama dengan sinkronisasi terakhir
+            // yang berhasil, tidak perlu kirim/ambil apa pun sama sekali - hemat
+            // kuota Apps Script & data seluler, sesuai permintaan supaya tidak boros.
+            const preHash = computeSyncHash(buildSyncPayload());
+            if (preHash === appData.lastSyncedHash) {
+                appData.pendingSync = false;
+                persistSilently();
+                updateSyncStatusUI();
+                if (!silent) showToast("Tidak ada perubahan baru untuk disinkronkan.");
+                return true;
+            }
 
             syncInProgress = true;
             const icon = document.getElementById('sync-icon');
@@ -3173,17 +3215,7 @@ function doGet(e) {
                     didMerge = true;
                 }
 
-                const payload = {
-                    modal: appData.modalKas,
-                    commissionRate: appData.commissionRate,
-                    items: appData.items, // Kirim semuanya, termasuk tombstone (deleted: true)
-                    masterTitipan: appData.masterTitipan || [],
-                    expensesOp: appData.expensesOp,
-                    expensesStock: appData.expensesStock,
-                    salesHistory: appData.salesHistory,
-                    payouts: appData.payouts || [],
-                    otherIncome: appData.otherIncome || []
-                };
+                const payload = buildSyncPayload();
 
                 await fetch(appData.sheetUrl, {
                     method: 'POST',
@@ -3194,6 +3226,7 @@ function doGet(e) {
 
                 appData.pendingSync = false;
                 appData.lastSyncDate = new Date().toISOString();
+                appData.lastSyncedHash = computeSyncHash(payload);
                 firstDirtyAt = null;
                 persistSilently();
 
