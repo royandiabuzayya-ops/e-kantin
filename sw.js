@@ -1,60 +1,62 @@
-// Service Worker untuk E-Kantin Cerdas.
-// Strategi: NETWORK-FIRST untuk file aplikasi sendiri (app shell) - selalu
-// coba ambil versi terbaru dulu saat online, baru fallback ke cache kalau
-// offline. Ini penting karena aplikasi masih aktif dikembangkan/diperbarui;
-// strategi cache-first (versi lama) membuat HP bisa "terjebak" memakai versi
-// lama selamanya walau file terbaru sudah di-upload ke hosting.
-//
-// CACHE_NAME dinaikkan setiap ada perubahan berarti pada file ini supaya
-// versi cache lama otomatis dibersihkan (lihat 'activate' di bawah).
-const CACHE_NAME = 'ekantin-cache-v2';
+// Catatan Tani - Service Worker
+// Cache-first for app shell so the app works fully offline in the field.
+const CACHE_VERSION = 'catatan-tani-v8';
 const APP_SHELL = [
+  './',
   './index.html',
   './manifest.json',
-  './icon-192.png',
-  './icon-512.png'
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  './icons/icon-maskable-512.png'
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL))
+    caches.open(CACHE_VERSION).then((cache) => cache.addAll(APP_SHELL)).then(() => self.skipWaiting())
   );
-  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
-      )
-    )
+      Promise.all(keys.filter((k) => k !== CACHE_VERSION).map((k) => caches.delete(k)))
+    ).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {
-  // Hanya tangani request GET dari origin yang sama (app shell).
-  // Request ke CDN (Tailwind/Fonts) atau ke Google Apps Script (sync)
-  // dibiarkan lewat jaringan seperti biasa (tidak disentuh Service Worker ini).
-  if (event.request.method !== 'GET') return;
+  const req = event.request;
+  if (req.method !== 'GET') return;
 
-  const url = new URL(event.request.url);
-  if (url.origin !== self.location.origin) return;
+  const url = new URL(req.url);
 
+  // App shell / same-origin: cache-first, fall back to network, then update cache.
+  if (url.origin === self.location.origin) {
+    event.respondWith(
+      caches.match(req).then((cached) => {
+        const networkFetch = fetch(req)
+          .then((res) => {
+            if (res && res.status === 200) {
+              const copy = res.clone();
+              caches.open(CACHE_VERSION).then((cache) => cache.put(req, copy));
+            }
+            return res;
+          })
+          .catch(() => cached);
+        return cached || networkFetch;
+      })
+    );
+    return;
+  }
+
+  // Cross-origin (e.g. web font): network-first, cache fallback, never block offline use.
   event.respondWith(
-    fetch(event.request, { cache: 'no-store' })
-      .then((response) => {
-        // Berhasil dari jaringan (online): simpan salinan terbaru ke cache
-        // untuk cadangan offline nanti, lalu kembalikan versi terbaru ini.
-        const clone = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-        return response;
+    fetch(req)
+      .then((res) => {
+        const copy = res.clone();
+        caches.open(CACHE_VERSION).then((cache) => cache.put(req, copy));
+        return res;
       })
-      .catch(() => {
-        // Gagal (offline/tidak ada koneksi): baru pakai salinan cache lama
-        // sebagai fallback, supaya aplikasi tetap bisa dibuka offline.
-        return caches.match(event.request);
-      })
+      .catch(() => caches.match(req))
   );
 });

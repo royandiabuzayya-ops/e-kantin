@@ -1,26 +1,32 @@
 {
-  "name": "E-Kantin Cerdas",
-  "short_name": "E-Kantin",
-  "description": "Aplikasi manajemen keuangan kantin sekolah - stok, titipan/konsinyasi, pengeluaran, dan pemasukan.",
+  "name": "Catatan Tani - Jurnal Pertanian",
+  "short_name": "Catatan Tani",
+  "description": "Catat setiap aktivitas pertanian dari olah lahan sampai panen, ketahui biaya produksi dan keuntungan sebenarnya.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "orientation": "portrait",
-  "background_color": "#ecfdf5",
-  "theme_color": "#059669",
+  "orientation": "portrait-primary",
+  "background_color": "#1f3d2e",
+  "theme_color": "#1f3d2e",
   "lang": "id",
   "icons": [
     {
-      "src": "icon-192.png",
+      "src": "icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
-      "src": "icon-512.png",
+      "src": "icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
