@@ -455,25 +455,14 @@
                     <input type="url" id="setting-sheet-url" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-mono focus:ring-2 focus:ring-brand-500 focus:outline-none" placeholder="https://script.google.com/macros/s/.../exec">
                 </div>
                 <button onclick="saveSheetUrlSetting()" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-semibold text-xs py-2.5 rounded-xl active:scale-95 transition">Simpan URL Sync</button>
-
-                <div class="flex items-center justify-between border-t border-slate-100 pt-3">
-                    <div>
-                        <label for="setting-autosync-enabled" class="text-xs font-semibold text-slate-700 block">Auto-Sync Otomatis</label>
-                        <p class="text-[10px] text-slate-500 mt-0.5">Sinkron otomatis di background setiap ada transaksi baru (aman dipakai offline).</p>
-                    </div>
-                    <label class="relative inline-flex items-center cursor-pointer shrink-0 ml-3">
-                        <input type="checkbox" id="setting-autosync-enabled" onchange="saveAutoSyncSetting()" class="sr-only peer">
-                        <div class="w-10 h-6 bg-slate-200 rounded-full peer peer-checked:bg-brand-600 transition-colors"></div>
-                        <div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full shadow transition-transform peer-checked:translate-x-4"></div>
-                    </label>
-                </div>
+                <p class="text-[11px] text-slate-500 -mt-1">Sinkronisasi sepenuhnya <b>manual</b> - tidak ada yang terkirim otomatis di belakang layar. Tekan "Sync Sheets" (pojok kanan atas) kapan pun kamu mau mengirim data terbaru.</p>
                 <p id="auto-sync-status" class="text-[10px] text-slate-400"></p>
 
                 <div class="border-t border-slate-100 pt-3">
-                    <button onclick="pullFromSheets()" class="w-full bg-amber-100 hover:bg-amber-200 text-amber-900 font-semibold text-xs py-2.5 rounded-xl active:scale-95 transition flex items-center justify-center gap-1.5">
-                        &#8595; Tarik Data dari Spreadsheet
+                    <button onclick="openModalVersionHistory()" class="w-full bg-amber-100 hover:bg-amber-200 text-amber-900 font-semibold text-xs py-2.5 rounded-xl active:scale-95 transition flex items-center justify-center gap-1.5">
+                        &#8595; Tarik Data dari Spreadsheet (Pilih Versi)
                     </button>
-                    <p class="text-[10px] text-slate-500 mt-1.5">Ambil data terakhir yang tersimpan di Spreadsheet dan muat ke aplikasi ini. Berguna kalau ganti HP atau data lokal hilang. <b class="text-amber-700">Akan menimpa data yang ada di aplikasi ini sekarang.</b></p>
+                    <p class="text-[10px] text-slate-500 mt-1.5">Setiap kali "Sync Sheets" ditekan, tersimpan sebagai versi baru di Spreadsheet (maks. 50 versi terakhir). Kalau data di HP hilang/rusak, pilih dari daftar versi tersimpan mana yang mau ditarik kembali - bukan cuma yang terakhir.</p>
                 </div>
 
                 <div class="pt-2">
@@ -511,7 +500,7 @@
             <div class="bg-red-50 rounded-2xl p-4 border border-red-100 space-y-2">
                 <h3 class="font-bold text-red-800 text-sm">Zona Bahaya</h3>
                 <p class="text-xs text-red-600">Menghapus seluruh data lokal di aplikasi ini.</p>
-                <button onclick="openModal('modal-reset-confirm')" class="bg-red-600 text-white text-xs font-semibold px-3 py-2 rounded-xl hover:bg-red-700 active:scale-95 transition">Reset Seluruh Data Kantin</button>
+                <button onclick="openModalResetConfirm()" class="bg-red-600 text-white text-xs font-semibold px-3 py-2 rounded-xl hover:bg-red-700 active:scale-95 transition">Reset Seluruh Data Kantin</button>
             </div>
         </section>
 
@@ -760,67 +749,117 @@ function doPost(e) {
   sRingkasan.appendRow(["Komisi Titipan (%)", data.commissionRate]);
   sRingkasan.appendRow(["Waktu Sync Terakhir", new Date().toLocaleString()]);
 
+  // Hanya menampilkan data yang TIDAK dihapus ke visualisasi tabel
   var sStok = sheet("Stok_Barang", ["Kode", "Nama Barang", "Jenis", "Penitip", "Stok", "Harga Jual"]);
-  (data.items || []).forEach(function(item){
+  (data.items || []).filter(function(i){ return !i.deleted; }).forEach(function(item){
     sStok.appendRow([item.code, item.name, item.isConsignment ? "Titipan" : "Sendiri", item.consignorName || "-", item.qty, item.price]);
   });
 
   var sOp = sheet("Pengeluaran_Operasional", ["Tanggal", "Kegiatan", "Uraian", "Nominal"]);
-  (data.expensesOp || []).forEach(function(e){
+  (data.expensesOp || []).filter(function(e){ return !e.deleted; }).forEach(function(e){
     sOp.appendRow([e.date, e.kegiatan, e.uraian, e.nominal]);
   });
 
   var sRestok = sheet("Penambahan_Stok", ["Tanggal", "Kode", "Nama Barang", "Qty Tambah", "Total Biaya"]);
-  (data.expensesStock || []).forEach(function(e){
+  (data.expensesStock || []).filter(function(e){ return !e.deleted; }).forEach(function(e){
     sRestok.appendRow([e.date, e.code, e.name, e.qty, e.totalCost]);
   });
 
   var sJual = sheet("Riwayat_Penjualan", ["Tanggal", "Jenis Sesi", "Nama Barang", "Terjual", "Omzet", "Komisi", "Penitip"]);
-  (data.salesHistory || []).forEach(function(s){
+  (data.salesHistory || []).filter(function(s){ return !s.deleted; }).forEach(function(s){
     (s.details || []).forEach(function(d){
       sJual.appendRow([s.date, s.isTitipanSession ? "Titipan" : "Sendiri", d.name, d.sold, d.income, d.commission || 0, d.consignorName || "-"]);
     });
   });
 
   var sSetor = sheet("Setoran_Penitip", ["Tanggal", "Penitip", "Nominal", "Catatan"]);
-  (data.payouts || []).forEach(function(p){
+  (data.payouts || []).filter(function(p){ return !p.deleted; }).forEach(function(p){
     sSetor.appendRow([p.date, p.consignorName, p.amount, p.notes || "-"]);
   });
 
   var sLain = sheet("Pemasukan_Lain", ["Tanggal", "Sumber", "Keterangan", "Nominal"]);
-  (data.otherIncome || []).forEach(function(o){
+  (data.otherIncome || []).filter(function(o){ return !o.deleted; }).forEach(function(o){
     sLain.appendRow([o.date, o.sumber, o.keterangan || "-", o.amount]);
   });
 
   var sMaster = sheet("Master_Titipan", ["Penitip", "Nama Barang", "Harga Jual"]);
-  (data.masterTitipan || []).forEach(function(m){
+  (data.masterTitipan || []).filter(function(m){ return !m.deleted; }).forEach(function(m){
     sMaster.appendRow([m.consignorName, m.name, m.price]);
   });
 
-  // Simpan JSON mentahnya juga (sheet tersembunyi/tidak perlu dibuka manual).
-  // Ini yang dipakai tombol "Tarik Data dari Spreadsheet" di aplikasi supaya
-  // data bisa dipulihkan utuh (bukan cuma dilihat sebagai tabel).
-  var sBackup = ss.getSheetByName("Backup_JSON") || ss.insertSheet("Backup_JSON");
-  sBackup.clear();
-  sBackup.getRange("A1").setValue(JSON.stringify(data));
+  // ===== VERSI SYNC =====
+  // Setiap kali sync, SIMPAN SEBAGAI BARIS BARU (bukan menimpa), supaya ada
+  // riwayat versi yang bisa dipilih kalau nanti perlu pulihkan data.
+  var sVersi = ss.getSheetByName("Versi_Sync");
+  if (!sVersi) {
+    sVersi = ss.insertSheet("Versi_Sync");
+    sVersi.appendRow(["Waktu", "Ringkasan", "JSON Data"]);
+  }
+
+  var jumlahBarang = (data.items || []).filter(function(i){ return !i.deleted; }).length;
+  var jumlahTransaksi = (data.salesHistory || []).filter(function(s){ return !s.deleted; }).length;
+  var ringkasan = jumlahBarang + " barang aktif, " + jumlahTransaksi + " riwayat penjualan, Modal Kas: " + data.modal;
+
+  sVersi.appendRow([new Date(), ringkasan, JSON.stringify(data)]);
+
+  // Batasi maksimal 50 versi tersimpan (hapus versi paling lama kalau lebih)
+  // supaya ukuran Spreadsheet tidak membengkak tanpa batas.
+  var lastRow = sVersi.getLastRow();
+  var MAX_VERSIONS = 50;
+  if (lastRow - 1 > MAX_VERSIONS) {
+    sVersi.deleteRows(2, (lastRow - 1) - MAX_VERSIONS);
+  }
 
   return ContentService.createTextOutput(JSON.stringify({"result": "success"})).setMimeType(ContentService.MimeType.JSON);
 }
 
 function doGet(e) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sh = ss.getSheetByName("Backup_JSON");
-  var json = (sh && sh.getRange("A1").getValue()) || "{}";
+  var sVersi = ss.getSheetByName("Versi_Sync");
+  var action = e.parameter.action || "latest";
+  var result;
 
-  // Dipanggil lewat elemen script dinamis (bukan fetch) supaya tidak kena batasan
-  // CORS browser saat menarik data. Kalau ada parameter callback, bungkus
-  // sebagai JSONP; kalau tidak, kembalikan JSON polos saja.
+  if (action === "listVersions") {
+    // Kembalikan daftar semua versi (tanpa JSON penuh, biar ringan) untuk
+    // ditampilkan sebagai pilihan di aplikasi.
+    var versions = [];
+    if (sVersi && sVersi.getLastRow() > 1) {
+      var values = sVersi.getRange(2, 1, sVersi.getLastRow() - 1, 2).getValues();
+      for (var i = 0; i < values.length; i++) {
+        versions.push({
+          row: i + 2,
+          timestamp: values[i][0],
+          summary: values[i][1]
+        });
+      }
+      versions.reverse(); // terbaru duluan
+    }
+    result = JSON.stringify(versions);
+  } else if (action === "getVersion") {
+    // Ambil JSON penuh dari satu baris/versi tertentu.
+    var rowNum = parseInt(e.parameter.row, 10);
+    var json = "{}";
+    if (sVersi && rowNum >= 2 && rowNum <= sVersi.getLastRow()) {
+      json = sVersi.getRange(rowNum, 3).getValue() || "{}";
+    }
+    result = json;
+  } else {
+    // Default ("latest"): kembalikan versi paling baru - dipakai untuk cek
+    // konflik saat pertama kali menyambungkan URL, dan untuk auto-merge saat
+    // tombol "Sync Sheets" ditekan.
+    var json2 = "{}";
+    if (sVersi && sVersi.getLastRow() > 1) {
+      json2 = sVersi.getRange(sVersi.getLastRow(), 3).getValue() || "{}";
+    }
+    result = json2;
+  }
+
   if (e.parameter.callback) {
     return ContentService
-      .createTextOutput(e.parameter.callback + "(" + json + ")")
+      .createTextOutput(e.parameter.callback + "(" + result + ")")
       .setMimeType(ContentService.MimeType.JAVASCRIPT);
   }
-  return ContentService.createTextOutput(json).setMimeType(ContentService.MimeType.JSON);
+  return ContentService.createTextOutput(result).setMimeType(ContentService.MimeType.JSON);
 }
             </textarea>
 
@@ -831,7 +870,7 @@ function doGet(e) {
             </p>
 
             <p class="text-[11px] bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-2.5 leading-relaxed">
-                <b>Sudah pernah setup sebelumnya?</b> Ganti kode lama di Apps Script dengan kode di atas (kode ini sudah termasuk fitur baru <i>doGet</i> untuk "Tarik Data dari Spreadsheet"), lalu <b>Deploy &gt; Kelola Penerapan &gt; ikon pensil &gt; Versi: Baru &gt; Deploy</b>. URL-nya tetap sama, tidak perlu diganti di aplikasi.
+                <b>Penting!</b> Pastikan mengganti kode <i>Apps Script</i> yang lama dengan yang ada di atas karena terdapat pembaruan penyaring untuk data yang dihapus (tombstone filter). Jangan lupa untuk <b>Deploy &gt; Kelola Penerapan &gt; Ikon Pensil &gt; Versi: Baru &gt; Deploy</b>.
             </p>
 
             <button onclick="closeModal('modal-guide')" class="w-full py-2.5 bg-brand-600 text-white font-semibold text-xs rounded-xl mt-2">Saya Mengerti</button>
@@ -843,9 +882,30 @@ function doGet(e) {
         <div class="bg-white w-full max-w-sm rounded-2xl p-5 shadow-xl space-y-3">
             <h3 class="font-bold text-red-800 text-base">Konfirmasi Reset Data</h3>
             <p class="text-xs text-slate-600 leading-relaxed">Apakah Anda yakin ingin menghapus seluruh data kantin secara permanen? Data yang dihapus tidak dapat dikembalikan.</p>
+
+            <button onclick="exportBackup()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs py-2.5 rounded-xl active:scale-95 transition flex items-center justify-center gap-1.5">
+                &#8595; Export Backup Dulu (Sangat Disarankan)
+            </button>
+            <p class="text-[11px] text-slate-500 -mt-1">Simpan file backup ini di tempat aman - kalau reset ternyata tidak sengaja, data masih bisa dipulihkan lewat menu "Impor Backup".</p>
+
+            <div id="container-reset-sheet-option" class="hidden bg-amber-50 border border-amber-200 rounded-xl p-3">
+                <label class="flex items-start gap-2 cursor-pointer">
+                    <input type="checkbox" id="checkbox-reset-sheet-too" onchange="toggleResetButtonState()" class="mt-0.5">
+                    <span class="text-xs text-amber-900">
+                        <b>Kosongkan juga data di Google Spreadsheet</b> yang terhubung.
+                        <span class="block text-[11px] text-amber-700 mt-0.5">Kalau tidak dicentang, Spreadsheet tetap menyimpan data lama - dan bisa "tertarik balik" ke aplikasi kalau nanti kamu sambungkan URL yang sama lagi.</span>
+                    </span>
+                </label>
+            </div>
+
+            <div class="pt-1">
+                <label class="block text-xs font-semibold text-red-700 mb-1">Ketik <span id="reset-confirm-word-label" class="font-mono bg-red-100 px-1.5 py-0.5 rounded">HAPUS</span> untuk mengaktifkan tombol reset:</label>
+                <input type="text" id="input-reset-confirm-text" oninput="toggleResetButtonState()" placeholder="Ketik di sini" class="w-full px-3 py-2 border border-red-300 rounded-xl text-sm focus:ring-2 focus:ring-red-500 focus:outline-none">
+            </div>
+
             <div class="flex gap-2 pt-2">
-                <button onclick="closeModal('modal-reset-confirm')" class="w-1/2 py-2.5 bg-slate-100 text-slate-700 font-semibold text-xs rounded-xl">Batal</button>
-                <button onclick="executeResetAllData()" class="w-1/2 py-2.5 bg-red-600 text-white font-semibold text-xs rounded-xl shadow-md">Ya, Reset</button>
+                <button onclick="closeModalResetConfirm()" class="w-1/2 py-2.5 bg-slate-100 text-slate-700 font-semibold text-xs rounded-xl">Batal</button>
+                <button id="btn-execute-reset" onclick="executeResetAllData()" disabled class="w-1/2 py-2.5 bg-red-300 text-white font-semibold text-xs rounded-xl shadow-md cursor-not-allowed transition-colors">Ya, Reset</button>
             </div>
         </div>
     </div>
@@ -982,6 +1042,22 @@ function doGet(e) {
         </div>
     </div>
 
+    <!-- MODAL: Riwayat Versi Sync (pilih versi mana yang mau ditarik) -->
+    <div id="modal-version-history" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-sm rounded-2xl p-5 shadow-xl space-y-3 max-h-[85vh] flex flex-col">
+            <div class="flex items-center justify-between">
+                <h3 class="font-bold text-slate-800 text-base">Riwayat Versi Sync</h3>
+                <button onclick="closeModal('modal-version-history')" class="text-slate-400 hover:text-slate-600">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <p class="text-xs text-slate-500">Pilih versi yang mau ditarik ke HP ini. <b class="text-amber-700">Akan menimpa data yang ada di aplikasi ini sekarang.</b></p>
+            <div id="version-history-list" class="space-y-2 overflow-y-auto flex-1 min-h-[100px]">
+                <p class="text-center text-xs text-slate-400 py-6">Memuat daftar versi...</p>
+            </div>
+        </div>
+    </div>
+
     <div id="modal-laporan" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
         <div class="bg-white w-full max-w-sm rounded-2xl p-5 shadow-xl space-y-3 max-h-[90vh] overflow-y-auto">
             <h3 class="font-bold text-slate-800 text-base">Buat Laporan</h3>
@@ -1068,25 +1144,30 @@ function doGet(e) {
             payouts: [],
             otherIncome: [],
             lastBackupDate: null,
-            autoSyncEnabled: true,
             pendingSync: false,
             lastSyncDate: null,
+            lastSyncedHash: null,
             lastStokPagiDate: null,
             schoolName: '',
             modalAwalLocked: false,
             securityPin: null
         };
 
-        // ===================== AUTO-SYNC (offline-safe) =====================
-        // Prinsip: aplikasi HARUS tetap berfungsi penuh secara offline. Auto-sync
-        // hanya "menumpang" di background, tidak pernah memblokir/menunda aksi
-        // pengguna. Kalau offline atau gagal, perubahan tetap aman di localStorage
-        // (pendingSync tetap true) dan akan dicoba lagi otomatis nanti.
-        let autoSyncTimer = null;
+        // --- FILTER AKTIF (MENGABAIKAN TOMBSTONE/YANG DIHAPUS) ---
+        // Digunakan khusus untuk logika rendering dan perhitungan (hanya membaca data).
+        const getActiveItems = () => (appData.items || []).filter(i => !i.deleted);
+        const getActiveMasterTitipan = () => (appData.masterTitipan || []).filter(i => !i.deleted);
+        const getActiveExpensesOp = () => (appData.expensesOp || []).filter(i => !i.deleted);
+        const getActiveExpensesStock = () => (appData.expensesStock || []).filter(i => !i.deleted);
+        const getActiveSalesHistory = () => (appData.salesHistory || []).filter(i => !i.deleted);
+        const getActivePayouts = () => (appData.payouts || []).filter(i => !i.deleted);
+        const getActiveOtherIncome = () => (appData.otherIncome || []).filter(i => !i.deleted);
+
+
+        // ===================== SYNC MANUAL (bukan otomatis) =====================
+        // Sinkronisasi HANYA terjadi saat tombol "Sync Sheets" ditekan pengguna.
+        // Tidak ada timer, tidak ada trigger otomatis saat online/perubahan data.
         let syncInProgress = false;
-        let firstDirtyAt = null;
-        const AUTO_SYNC_DEBOUNCE_MS = 8000;   // tunggu jeda 8 detik tanpa perubahan baru
-        const AUTO_SYNC_MAX_WAIT_MS = 45000;  // tapi kalau terus-terusan ada perubahan, paksa sync tiap maks 45 detik
 
         function persistSilently() {
             try {
@@ -1096,37 +1177,7 @@ function doGet(e) {
             }
         }
 
-        function scheduleAutoSync() {
-            updateSyncStatusUI();
-            if (!appData.autoSyncEnabled || !appData.sheetUrl || !appData.pendingSync) return;
-
-            if (!firstDirtyAt) firstDirtyAt = Date.now();
-            const elapsed = Date.now() - firstDirtyAt;
-
-            if (autoSyncTimer) clearTimeout(autoSyncTimer);
-
-            if (elapsed >= AUTO_SYNC_MAX_WAIT_MS) {
-                attemptAutoSync();
-                return;
-            }
-            autoSyncTimer = setTimeout(attemptAutoSync, AUTO_SYNC_DEBOUNCE_MS);
-        }
-
-        async function attemptAutoSync() {
-            if (!appData.autoSyncEnabled || !appData.sheetUrl || !appData.pendingSync) return;
-            if (syncInProgress) return;
-            if (!navigator.onLine) {
-                // Offline: jangan coba fetch sama sekali, cukup tunggu event 'online'.
-                updateSyncStatusUI();
-                return;
-            }
-            await performSync(true);
-        }
-
         function saveData() {
-            // Tandai ada perubahan yang belum tersinkron. Ditandai selalu (bukan
-            // cuma saat auto-sync aktif) supaya kalau nanti user mengaktifkan
-            // auto-sync, perubahan sebelumnya tetap ikut ter-sync.
             appData.pendingSync = true;
             try {
                 localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(appData));
@@ -1134,14 +1185,10 @@ function doGet(e) {
                 console.error("Gagal menyimpan ke LocalStorage:", e);
             }
             renderAll();
-            scheduleAutoSync();
+            updateSyncStatusUI();
         }
 
         // ===================== RIWAYAT HARIAN =====================
-        // Menggabungkan SEMUA sumber transaksi (penjualan sendiri, penjualan
-        // titipan, pemasukan lain, pengeluaran operasional, restok, setoran
-        // penitip) dikelompokkan per tanggal, supaya kelihatan jelas berapa
-        // uang masuk & keluar tiap hari dari semua sumber sekaligus.
 
         function toggleDailyRecap() {
             const body = document.getElementById('daily-recap-body');
@@ -1159,7 +1206,6 @@ function doGet(e) {
         }
 
         function getDailyRecapMap() {
-            // key: 'YYYY-MM-DD' -> { sendiri, titipan, lain, ops, restok, setoran }
             const map = new Map();
             const dayKey = (iso) => {
                 const d = new Date(iso);
@@ -1173,29 +1219,29 @@ function doGet(e) {
                 return map.get(key);
             };
 
-            (appData.salesHistory || []).forEach(s => {
+            getActiveSalesHistory().forEach(s => {
                 const key = dayKey(s.date);
                 if (!key) return;
                 const row = ensure(key);
                 if (s.isTitipanSession) row.titipan += (s.totalSales || 0);
                 else row.sendiri += (s.totalSales || 0);
             });
-            (appData.otherIncome || []).forEach(o => {
+            getActiveOtherIncome().forEach(o => {
                 const key = dayKey(o.date);
                 if (!key) return;
                 ensure(key).lain += (o.amount || 0);
             });
-            (appData.expensesOp || []).forEach(e => {
+            getActiveExpensesOp().forEach(e => {
                 const key = dayKey(e.date);
                 if (!key) return;
                 ensure(key).ops += (e.nominal || 0);
             });
-            (appData.expensesStock || []).forEach(e => {
+            getActiveExpensesStock().forEach(e => {
                 const key = dayKey(e.date);
                 if (!key) return;
                 ensure(key).restok += (e.totalCost || 0);
             });
-            (appData.payouts || []).forEach(p => {
+            getActivePayouts().forEach(p => {
                 const key = dayKey(p.date);
                 if (!key) return;
                 ensure(key).setoran += (p.amount || 0);
@@ -1204,16 +1250,12 @@ function doGet(e) {
             return map;
         }
 
-        // Helper bersama: render daftar rekap harian ke container manapun,
-        // dipakai baik oleh card ringkas di atas maupun tab Riwayat penuh.
-        // Return { totalMasuk, totalKeluar } supaya pemanggil bisa tampilkan
-        // ringkasan total periode kalau perlu.
         function renderDailyRecapInto(containerId, filterVal) {
             const container = document.getElementById(containerId);
             if (!container) return { totalMasuk: 0, totalKeluar: 0 };
 
             const map = getDailyRecapMap();
-            let keys = Array.from(map.keys()).sort((a, b) => b.localeCompare(a)); // terbaru dulu
+            let keys = Array.from(map.keys()).sort((a, b) => b.localeCompare(a)); 
 
             if (filterVal !== 'all') {
                 const days = parseInt(filterVal);
@@ -1294,12 +1336,11 @@ function doGet(e) {
         }
 
         function renderAll() {
-            // --- Hitung ringkasan dashboard ---
             let totalOwnSales = 0;
             let totalTitipanCommission = 0;
             let totalTitipanNetOwed = 0;
 
-            (appData.salesHistory || []).forEach(s => {
+            getActiveSalesHistory().forEach(s => {
                 if (s.isTitipanSession) {
                     totalTitipanCommission += (s.totalCommission || 0);
                     totalTitipanNetOwed += ((s.totalSales || 0) - (s.totalCommission || 0));
@@ -1308,10 +1349,10 @@ function doGet(e) {
                 }
             });
 
-            const totalExpensesOp = (appData.expensesOp || []).reduce((acc, e) => acc + (e.nominal || 0), 0);
-            const totalExpensesStock = (appData.expensesStock || []).reduce((acc, e) => acc + (e.totalCost || 0), 0);
-            const totalPayouts = (appData.payouts || []).reduce((acc, p) => acc + (p.amount || 0), 0);
-            const totalOtherIncome = (appData.otherIncome || []).reduce((acc, o) => acc + (o.amount || 0), 0);
+            const totalExpensesOp = getActiveExpensesOp().reduce((acc, e) => acc + (e.nominal || 0), 0);
+            const totalExpensesStock = getActiveExpensesStock().reduce((acc, e) => acc + (e.totalCost || 0), 0);
+            const totalPayouts = getActivePayouts().reduce((acc, p) => acc + (p.amount || 0), 0);
+            const totalOtherIncome = getActiveOtherIncome().reduce((acc, o) => acc + (o.amount || 0), 0);
 
             const labaNet = totalOwnSales + totalTitipanCommission + totalOtherIncome - totalExpensesOp - totalExpensesStock;
             const outstandingConsignor = totalTitipanNetOwed - totalPayouts;
@@ -1350,12 +1391,8 @@ function doGet(e) {
                 }
             }
 
-            const autoSyncCheckbox = document.getElementById('setting-autosync-enabled');
-            if (autoSyncCheckbox) autoSyncCheckbox.checked = appData.autoSyncEnabled !== false;
-
             updateSyncStatusUI();
 
-            // --- Render ulang semua daftar/section ---
             renderStockList();
             renderDashboardCerdas();
             renderTitipanList();
@@ -1388,7 +1425,7 @@ function doGet(e) {
                 if (displayKas) displayKas.innerText = formatRp(appData.modalKas || 0);
                 const displayCount = document.getElementById('display-modal-awal-count');
                 if (displayCount) {
-                    const count = (appData.items || []).filter(i => i.isModalAwal).length;
+                    const count = getActiveItems().filter(i => i.isModalAwal).length;
                     displayCount.innerText = `${count} jenis barang`;
                 }
             } else {
@@ -1424,12 +1461,7 @@ function doGet(e) {
             if (!el) return;
 
             if (!appData.sheetUrl) {
-                el.innerText = 'Auto-sync: belum aktif (isi URL Apps Script dulu di atas).';
-                el.className = 'text-[10px] text-slate-400 mt-1';
-                return;
-            }
-            if (!appData.autoSyncEnabled) {
-                el.innerText = 'Auto-sync: dimatikan. Gunakan tombol "Sync Sheets" untuk sync manual.';
+                el.innerText = 'Belum tersambung ke Spreadsheet (isi URL Apps Script dulu di atas).';
                 el.className = 'text-[10px] text-slate-400 mt-1';
                 return;
             }
@@ -1438,48 +1470,28 @@ function doGet(e) {
                 el.className = 'text-[10px] text-sky-600 font-medium mt-1';
                 return;
             }
-            if (appData.pendingSync && !navigator.onLine) {
-                el.innerText = 'Sedang offline. Perubahan akan otomatis tersinkron begitu HP online kembali.';
-                el.className = 'text-[10px] text-amber-600 font-medium mt-1';
-                return;
-            }
             if (appData.pendingSync) {
-                el.innerText = 'Ada perubahan baru, menunggu jeda untuk auto-sync...';
+                el.innerText = 'Ada perubahan yang belum disinkronkan. Tekan "Sync Sheets" kapan pun siap.';
                 el.className = 'text-[10px] text-amber-600 mt-1';
                 return;
             }
             if (appData.lastSyncDate) {
-                el.innerText = `Tersinkron otomatis terakhir: ${new Date(appData.lastSyncDate).toLocaleString('id-ID')}`;
+                el.innerText = `Tersinkron terakhir: ${new Date(appData.lastSyncDate).toLocaleString('id-ID')}`;
                 el.className = 'text-[10px] text-emerald-600 font-medium mt-1';
                 return;
             }
-            el.innerText = 'Auto-sync aktif, menunggu perubahan pertama.';
+            el.innerText = 'Belum pernah disinkronkan. Tekan "Sync Sheets" untuk mulai.';
             el.className = 'text-[10px] text-slate-400 mt-1';
         }
 
-        window.addEventListener('online', () => {
-            updateNetworkStatus();
-            attemptAutoSync();
-        });
+        window.addEventListener('online', updateNetworkStatus);
         window.addEventListener('offline', updateNetworkStatus);
-
-        // Kalau HP/tablet di-background lalu dibuka lagi (misal kasir buka WA
-        // sebentar lalu balik), coba sync ulang siapa tahu ada yang tertunda.
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') attemptAutoSync();
-        });
-
-        // Jaring pengaman: kalau timer debounce meleset (misal tab di-background
-        // saat browser membekukan timer), cek ulang tiap 1 menit.
-        setInterval(() => { attemptAutoSync(); }, 60000);
 
         function formatRp(value) {
             const num = Number(value) || 0;
             return 'Rp ' + num.toLocaleString('id-ID');
         }
 
-        // Mencegah XSS/HTML injection: escape karakter berbahaya sebelum
-        // dimasukkan ke innerHTML lewat template literal.
         function escapeHtml(str) {
             if (str === null || str === undefined) return '';
             return String(str)
@@ -1490,30 +1502,20 @@ function doGet(e) {
                 .replace(/'/g, '&#39;');
         }
 
-        // ID unik anti-tabrakan (menggantikan Date.now() yang bisa duplikat
-        // kalau dua data dibuat di milidetik yang sama).
         function generateId() {
             if (window.crypto && typeof window.crypto.randomUUID === 'function') {
                 return window.crypto.randomUUID();
             }
-            // Fallback untuk browser lama tanpa crypto.randomUUID
             return Date.now().toString() + '-' + Math.random().toString(36).substr(2, 9);
         }
 
-        // Tandai kapan sebuah barang/master titipan terakhir diubah. Dipakai
-        // saat sync-merge untuk memutuskan versi mana yang lebih baru kalau
-        // data yang sama diedit di dua perangkat berbeda sebelum sempat sinkron.
+        // Tombstone Update Mechanism (Catat Kapan Data Ini Dibuat/Diedit/Dihapus)
         function touchItem(obj) {
             obj.updatedAt = new Date().toISOString();
             return obj;
         }
 
         // ===================== SISTEM KODE KEAMANAN (MODAL AWAL) =====================
-        // Proteksi terhadap perubahan TIDAK SENGAJA pada Modal Awal (kas & daftar
-        // barang awal), bukan enkripsi tingkat tinggi. Kode disimpan apa adanya di
-        // localStorage perangkat ini - siapa pun yang membuka DevTools browser di
-        // HP ini masih bisa melihatnya. Tujuannya mencegah salah pencet/edit
-        // ceroboh, bukan menahan orang yang memang berniat membongkarnya.
 
         let pendingPinAction = null;
 
@@ -1570,10 +1572,8 @@ function doGet(e) {
             appData.securityPin = pin;
             appData.modalAwalLocked = true;
 
-            // Ambil snapshot semua barang MILIK SENDIRI yang sudah ada saat ini
-            // sebagai "Modal Awal Barang" yang dilindungi. Barang baru yang
-            // ditambahkan SETELAH ini (lewat Restok/Tambah Barang) tetap bebas
-            // dikelola seperti biasa - supaya operasional harian tidak terhambat.
+            // Kita biarkan appData.items di-loop karena barang yang dihapus(deleted) pun aman untuk dikunci 
+            // (tidak berpengaruh ke logika render)
             appData.items.forEach(item => {
                 if (!item.isConsignment) {
                     item.isModalAwal = true;
@@ -1598,8 +1598,6 @@ function doGet(e) {
                 return;
             }
             closeModal('modal-forgot-pin');
-            // Reset kode lama, lalu langsung minta buat kode baru supaya Modal
-            // Awal tidak pernah dalam keadaan "terkunci tanpa kode".
             appData.securityPin = null;
             saveData();
             showToast("Kode lama direset. Silakan buat kode keamanan baru.");
@@ -1615,9 +1613,6 @@ function doGet(e) {
 
         function requestUnlockModalAwal() {
             requirePin(() => {
-                // Tampilkan lagi form edit sementara. appData.modalAwalLocked TIDAK
-                // diubah di sini, jadi setelah disimpan (saveData -> renderAll),
-                // tampilan otomatis kembali ke mode terkunci untuk sesi berikutnya.
                 document.getElementById('modal-awal-locked-view').classList.add('hidden');
                 document.getElementById('modal-awal-unlocked-view').classList.remove('hidden');
                 document.getElementById('input-modal-awal-kas-setup').value = appData.modalKas;
@@ -1625,12 +1620,6 @@ function doGet(e) {
             });
         }
 
-        // Ambil tanggal transaksi dari input <input type="date">, digabung
-        // dengan jam saat ini supaya urutan transaksi dalam hari yang sama
-        // tetap masuk akal. Kalau field tanggal kosong/tidak ada, pakai waktu
-        // sekarang apa adanya (fallback aman). Dipakai di semua pencatatan
-        // transaksi supaya tanggalnya bisa diatur manual (backdate), bukan
-        // selalu otomatis hari ini.
         function getChosenDateISO(inputId) {
             const el = document.getElementById(inputId);
             const dateStr = el ? el.value : '';
@@ -1641,6 +1630,7 @@ function doGet(e) {
 
         function generateAutoCode() {
             let maxNum = 0;
+            // Gunakan array aslinya, agar barang terhapus tetap dihitung menghindari konflik ID kode.
             appData.items.forEach(item => {
                 if (item.code && item.code.startsWith('BRG-')) {
                     const num = parseInt(item.code.replace('BRG-', '')) || 0;
@@ -1653,17 +1643,17 @@ function doGet(e) {
 
         function getConsignorList() {
             const consignors = new Set();
-            appData.items.forEach(i => {
+            getActiveItems().forEach(i => {
                 if (i.isConsignment && i.consignorName && i.consignorName.trim()) {
                     consignors.add(i.consignorName.trim());
                 }
             });
-            (appData.payouts || []).forEach(p => {
+            getActivePayouts().forEach(p => {
                 if (p.consignorName && p.consignorName.trim()) {
                     consignors.add(p.consignorName.trim());
                 }
             });
-            (appData.salesHistory || []).forEach(s => {
+            getActiveSalesHistory().forEach(s => {
                 if (s.details && Array.isArray(s.details)) {
                     s.details.forEach(d => {
                         if (d.isConsignment && d.consignorName && d.consignorName.trim()) {
@@ -1718,33 +1708,18 @@ function doGet(e) {
                     if (!appData.salesHistory) appData.salesHistory = [];
                     if (!appData.masterTitipan) appData.masterTitipan = [];
                     if (!appData.otherIncome) appData.otherIncome = [];
-                    if (appData.autoSyncEnabled === undefined) appData.autoSyncEnabled = true;
                     if (appData.pendingSync === undefined) appData.pendingSync = false;
                     if (appData.lastSyncDate === undefined) appData.lastSyncDate = null;
                 } catch(e) {
                     console.error("Failed to parse local data", e);
                 }
             } else {
-                appData.items = [
-                    { id: '1', code: 'BRG-001', name: 'Nasi Goreng Kantin', qty: 15, price: 10000, isConsignment: false, consignorName: '' },
-                    { id: '2', code: 'BRG-002', name: 'Roti Bakar Pak Ali', qty: 20, price: 5000, isConsignment: true, consignorName: 'Pak Ali' }
-                ];
-                appData.masterTitipan = [
-                    { id: 'm1', name: 'Roti Bakar', consignorName: 'Pak Ali', price: 5000 },
-                    { id: 'm2', name: 'Kue Basah', consignorName: 'Bu Titin', price: 3000 },
-                    { id: 'm3', name: 'Donat Cokelat', consignorName: 'Bu Titin', price: 2500 }
-                ];
+                // Initialize default empty
+                appData.items = [];
                 saveData();
             }
             updateNetworkStatus();
             renderAll();
-
-            // Kalau ada perubahan dari sesi sebelumnya yang belum sempat ter-sync
-            // (misal app ditutup sebelum jeda debounce selesai), coba lagi setelah
-            // halaman selesai dimuat.
-            if (appData.pendingSync) {
-                setTimeout(() => attemptAutoSync(), 3000);
-            }
         }
 
         function openModalMasterTitipan() {
@@ -1761,12 +1736,14 @@ function doGet(e) {
             if (!container) return;
             container.innerHTML = '';
 
-            if (!appData.masterTitipan || appData.masterTitipan.length === 0) {
+            const masterActive = getActiveMasterTitipan();
+
+            if (masterActive.length === 0) {
                 container.innerHTML = `<p class="text-center text-xs text-slate-400 py-4">Belum ada daftar master titipan tersimpan.</p>`;
                 return;
             }
 
-            appData.masterTitipan.forEach(item => {
+            masterActive.forEach(item => {
                 const div = document.createElement('div');
                 div.className = "bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center text-xs";
                 div.innerHTML = `
@@ -1795,8 +1772,8 @@ function doGet(e) {
 
             if (!appData.masterTitipan) appData.masterTitipan = [];
 
-            // Check if already exists
-            const existing = appData.masterTitipan.find(m => 
+            // Check if already exists in active
+            const existing = getActiveMasterTitipan().find(m => 
                 m.name.toLowerCase() === name.toLowerCase() && 
                 m.consignorName.toLowerCase() === consignorName.toLowerCase()
             );
@@ -1820,30 +1797,90 @@ function doGet(e) {
             showToast("Master Barang Titipan Disimpan!");
         }
 
+        // ===================== TOMBSTONE DELETE FUNCTIONS =====================
         function deleteMasterTitipanItem(id) {
-            const master = (appData.masterTitipan || []).find(m => m.id === id);
+            const master = appData.masterTitipan.find(m => m.id === id);
             const label = master ? `${master.name} (${master.consignorName})` : 'master barang ini';
             if (!confirm(`Yakin ingin menghapus "${label}" dari Master Titipan?`)) return;
-            appData.masterTitipan = (appData.masterTitipan || []).filter(m => m.id !== id);
-            saveData();
-            renderMasterTitipanList();
-            showToast("Master Barang Dihapus");
+            if (master) {
+                master.deleted = true;
+                touchItem(master);
+                saveData();
+                renderMasterTitipanList();
+                showToast("Master Barang Dihapus");
+            }
         }
+
+        function deleteItemUnlocked(id) {
+            const item = appData.items.find(i => i.id === id);
+            const label = item ? item.name : 'barang ini';
+            if (!confirm(`Yakin ingin menghapus "${label}"? Data stok ini tidak bisa dikembalikan.`)) return;
+            if (item) {
+                item.deleted = true;
+                touchItem(item);
+                saveData();
+                showToast("Barang Berhasil Dihapus");
+            }
+        }
+
+        function deleteExpenseOp(id) {
+            if (!confirm("Yakin ingin menghapus catatan pengeluaran operasional ini?")) return;
+            const exp = appData.expensesOp.find(e => e.id === id);
+            if (exp) {
+                exp.deleted = true;
+                touchItem(exp);
+                saveData();
+                showToast("Pengeluaran Operasional Dihapus");
+            }
+        }
+
+        function deleteExpenseStock(id) {
+            if (!confirm("Yakin ingin menghapus catatan restok ini? Stok barang tidak akan otomatis dikurangi.")) return;
+            const exp = appData.expensesStock.find(e => e.id === id);
+            if (exp) {
+                exp.deleted = true;
+                touchItem(exp);
+                saveData();
+                showToast("Catatan Restok Dihapus");
+            }
+        }
+
+        function deleteIncomeLain(id) {
+            if (!confirm("Yakin ingin menghapus catatan pemasukan ini?")) return;
+            const obj = appData.otherIncome.find(o => o.id === id);
+            if (obj) {
+                obj.deleted = true;
+                touchItem(obj);
+                saveData();
+                showToast("Catatan Pemasukan Dihapus");
+            }
+        }
+
+        function deletePayout(id) {
+            if (!confirm("Yakin ingin menghapus catatan setoran ini?")) return;
+            const obj = appData.payouts.find(p => p.id === id);
+            if (obj) {
+                obj.deleted = true;
+                touchItem(obj);
+                saveData();
+                showToast("Catatan Setoran Dihapus");
+            }
+        }
+        // ====================================================================
 
         function openModalQuickStokPagi() {
             const container = document.getElementById('quick-stok-pagi-container');
             if (!container) return;
             container.innerHTML = '';
 
-            // Default tanggal: pakai tanggal stok pagi terakhir kalau ada &
-            // belum sempat ditutup (misal buka modal lagi di hari yang sama
-            // atau lupa nutup kemarin), kalau tidak pakai hari ini.
             const tglInput = document.getElementById('input-quick-stok-tanggal');
             if (tglInput) {
                 tglInput.value = appData.lastStokPagiDate || new Date().toISOString().slice(0, 10);
             }
 
-            if (!appData.masterTitipan || appData.masterTitipan.length === 0) {
+            const activeMaster = getActiveMasterTitipan();
+
+            if (activeMaster.length === 0) {
                 container.innerHTML = `
                     <div class="text-center py-6 space-y-2">
                         <p class="text-xs text-slate-500">Belum ada barang di Master Titipan.</p>
@@ -1854,9 +1891,8 @@ function doGet(e) {
                 return;
             }
 
-            appData.masterTitipan.forEach(master => {
-                // Check if already in active today's items
-                const activeItem = appData.items.find(i => 
+            activeMaster.forEach(master => {
+                const activeItem = getActiveItems().find(i => 
                     i.isConsignment && 
                     i.name.toLowerCase() === master.name.toLowerCase() && 
                     (i.consignorName || '').toLowerCase() === master.consignorName.toLowerCase()
@@ -1886,19 +1922,19 @@ function doGet(e) {
         }
 
         function saveQuickStokPagi() {
-            if (!appData.masterTitipan || appData.masterTitipan.length === 0) return;
+            const activeMaster = getActiveMasterTitipan();
+            if (activeMaster.length === 0) return;
 
             let addedCount = 0;
 
-            appData.masterTitipan.forEach(master => {
+            activeMaster.forEach(master => {
                 const input = document.getElementById(`quick-qty-${master.id}`);
                 if (!input) return;
 
                 const qty = parseInt(input.value) || 0;
                 if (qty <= 0) return;
 
-                // Find if exists in active items
-                let activeItem = appData.items.find(i => 
+                let activeItem = getActiveItems().find(i => 
                     i.isConsignment && 
                     i.name.toLowerCase() === master.name.toLowerCase() && 
                     (i.consignorName || '').toLowerCase() === master.consignorName.toLowerCase()
@@ -1923,9 +1959,6 @@ function doGet(e) {
             });
 
             if (addedCount > 0) {
-                // Simpan tanggal yang dipakai untuk stok pagi ini, supaya nanti
-                // form "Tutup Penjualan Siang" otomatis pre-fill tanggal yang
-                // sama - tidak perlu isi dua kali dan tidak gampang salah tanggal.
                 const tglInput = document.getElementById('input-quick-stok-tanggal');
                 appData.lastStokPagiDate = (tglInput && tglInput.value) || new Date().toISOString().slice(0, 10);
 
@@ -1938,9 +1971,8 @@ function doGet(e) {
         }
 
         function renderDashboardCerdas() {
-            const ownItems = (appData.items || []).filter(i => !i.isConsignment);
+            const ownItems = getActiveItems().filter(i => !i.isConsignment);
 
-            // --- Kartu ringkas ---
             const totalItems = ownItems.length;
             const totalValue = ownItems.reduce((acc, i) => acc + (i.qty * i.price), 0);
             const LOW_STOCK_THRESHOLD = 5;
@@ -1953,7 +1985,6 @@ function doGet(e) {
             if (elTotalValue) elTotalValue.innerText = formatRp(totalValue);
             if (elLowStockCount) elLowStockCount.innerText = lowStockItems.length;
 
-            // --- Kartu Stok Menipis ---
             const lowStockCard = document.getElementById('dashboard-low-stock-card');
             const lowStockList = document.getElementById('dashboard-low-stock-list');
             if (lowStockCard && lowStockList) {
@@ -1970,13 +2001,12 @@ function doGet(e) {
                 }
             }
 
-            // --- Barang Terlaris & Belum Laku (30 hari terakhir) ---
             const cutoff = new Date();
             cutoff.setDate(cutoff.getDate() - 30);
 
-            const soldMap = new Map(); // nama -> total terjual
-            (appData.salesHistory || []).forEach(s => {
-                if (s.isTitipanSession) return; // hanya barang sendiri
+            const soldMap = new Map();
+            getActiveSalesHistory().forEach(s => {
+                if (s.isTitipanSession) return;
                 if (new Date(s.date) < cutoff) return;
                 (s.details || []).forEach(d => {
                     const cur = soldMap.get(d.name) || 0;
@@ -2012,7 +2042,6 @@ function doGet(e) {
                 }
             }
 
-            // --- Belum Laku (stok > 0 tapi tidak ada di soldMap) ---
             const slowMovers = ownItems.filter(i => i.qty > 0 && !soldMap.has(i.name));
             const slowMoversCard = document.getElementById('dashboard-slow-movers-card');
             const slowMoversList = document.getElementById('dashboard-slow-movers-list');
@@ -2037,7 +2066,7 @@ function doGet(e) {
             if (!container) return;
             container.innerHTML = '';
 
-            const filtered = appData.items.filter(item => 
+            const filtered = getActiveItems().filter(item => 
                 !item.isConsignment && 
                 ((item.name || '').toLowerCase().includes(search) || (item.code || '').toLowerCase().includes(search))
             );
@@ -2078,7 +2107,7 @@ function doGet(e) {
             if (!container) return;
             container.innerHTML = '';
 
-            const filtered = appData.items.filter(item => 
+            const filtered = getActiveItems().filter(item => 
                 item.isConsignment && 
                 ((item.name || '').toLowerCase().includes(search) || (item.code || '').toLowerCase().includes(search) || (item.consignorName || '').toLowerCase().includes(search))
             );
@@ -2121,16 +2150,12 @@ function doGet(e) {
             if (!container) return;
             container.innerHTML = '';
 
-            // Default tanggal: kalau ada tanggal Stok Pagi yang belum "dipakai"
-            // untuk closing (appData.lastStokPagiDate), pakai itu supaya nyambung
-            // otomatis dengan sesi stok pagi. Terus mengikuti nilai itu di setiap
-            // render SELAMA user belum sengaja mengubah field ini sendiri.
             const tglInput = document.getElementById('titipan-closing-tanggal');
             if (tglInput && !titipanClosingDateTouched) {
                 tglInput.value = appData.lastStokPagiDate || new Date().toISOString().slice(0, 10);
             }
 
-            const titipanItems = appData.items.filter(item => item.isConsignment);
+            const titipanItems = getActiveItems().filter(item => item.isConsignment);
 
             if (titipanItems.length === 0) {
                 container.innerHTML = `<p class="text-center text-xs text-slate-400 py-3">Belum ada barang titipan untuk dihitung siang ini.</p>`;
@@ -2158,7 +2183,7 @@ function doGet(e) {
         }
 
         function processTitipanOpname() {
-            const titipanItems = appData.items.filter(item => item.isConsignment);
+            const titipanItems = getActiveItems().filter(item => item.isConsignment);
             if (titipanItems.length === 0) {
                 showToast("Tidak ada barang titipan untuk diolah!");
                 return;
@@ -2210,15 +2235,12 @@ function doGet(e) {
 
             if (hasError) return;
 
-            // Jika tidak ada barang yang terjual maupun sisa yang dikembalikan
-            // (misal tombol tertekan dua kali dan stok sudah 0), jangan simpan
-            // riwayat kosong yang cuma jadi sampah data.
             if (details.length === 0) {
                 showToast("Tidak ada stok titipan untuk diproses.");
                 return;
             }
 
-            appData.salesHistory.push({
+            appData.salesHistory.push(touchItem({
                 id: generateId(),
                 date: getChosenDateISO('titipan-closing-tanggal'),
                 totalSales: totalGrossSales,
@@ -2226,15 +2248,11 @@ function doGet(e) {
                 itemCount: totalItemsSold,
                 isTitipanSession: true,
                 details: details
-            });
+            }));
 
-            // Reset ke tanggal hari ini untuk sesi berikutnya (mencegah tanggal
-            // lama yang dipakai tanpa sadar terpakai lagi di transaksi berikutnya).
             const tglInputReset = document.getElementById('titipan-closing-tanggal');
             if (tglInputReset) tglInputReset.value = '';
 
-            // Siklus stok pagi -> siang untuk tanggal ini sudah selesai diproses,
-            // hapus penanda supaya sesi stok pagi berikutnya default ke hari ini lagi.
             appData.lastStokPagiDate = null;
             titipanClosingDateTouched = false;
 
@@ -2258,7 +2276,7 @@ function doGet(e) {
                 let totalComm = 0;
                 let totalSoldPcs = 0;
 
-                (appData.salesHistory || []).forEach(s => {
+                getActiveSalesHistory().forEach(s => {
                     if (s.details && Array.isArray(s.details)) {
                         s.details.forEach(d => {
                             if (d.isConsignment && (d.consignorName || '').toLowerCase() === consignorName.toLowerCase()) {
@@ -2271,20 +2289,18 @@ function doGet(e) {
                     }
                 });
 
-                const totalPaid = (appData.payouts || []).reduce((acc, p) => {
+                const totalPaid = getActivePayouts().reduce((acc, p) => {
                     if ((p.consignorName || '').toLowerCase() === consignorName.toLowerCase()) {
                         return acc + (p.amount || 0);
                     }
                     return acc;
                 }, 0);
 
-                // Math.max(0, ...) supaya jika ada setoran lebih (overpay), label
-                // tidak menampilkan angka minus yang membingungkan.
                 const remainingOwed = Math.max(0, totalNetOwed - totalPaid);
                 const isOverpaid = (totalNetOwed - totalPaid) < -0.01;
 
                 let payoutHistoryHtml = '';
-                const consignorPayouts = (appData.payouts || []).filter(p => (p.consignorName || '').toLowerCase() === consignorName.toLowerCase());
+                const consignorPayouts = getActivePayouts().filter(p => (p.consignorName || '').toLowerCase() === consignorName.toLowerCase());
                 if (consignorPayouts.length > 0) {
                     payoutHistoryHtml = consignorPayouts.map(p => {
                         const dStr = new Date(p.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
@@ -2314,9 +2330,6 @@ function doGet(e) {
                     </div>
                     ${payoutHistoryHtml ? `<ul class="bg-slate-50 p-2 rounded-xl border border-slate-100">${payoutHistoryHtml}</ul>` : ''}
                 `;
-                // Pakai addEventListener (bukan inline onclick string) supaya nama
-                // penitip yang mengandung kutip/karakter khusus tidak bisa lolos
-                // dari atribut HTML.
                 const payoutBtn = div.querySelector('[data-payout-btn]');
                 if (payoutBtn) {
                     payoutBtn.addEventListener('click', () => openModalPenyerahanUang(consignorName));
@@ -2325,12 +2338,9 @@ function doGet(e) {
             });
         }
 
-        // Helper terpusat: hitung sisa hak uang penitip saat ini (tidak pernah minus).
-        // Dipakai oleh openModalPenyerahanUang() dan savePenyerahanUang() supaya
-        // perhitungan selalu konsisten dan tidak basi (stale).
         function getRemainingOwed(consignorName) {
             let totalNetOwed = 0;
-            (appData.salesHistory || []).forEach(s => {
+            getActiveSalesHistory().forEach(s => {
                 if (s.details && Array.isArray(s.details)) {
                     s.details.forEach(d => {
                         if (d.isConsignment && (d.consignorName || '').toLowerCase() === consignorName.toLowerCase()) {
@@ -2340,7 +2350,7 @@ function doGet(e) {
                 }
             });
 
-            const totalPaid = (appData.payouts || []).reduce((acc, p) => {
+            const totalPaid = getActivePayouts().reduce((acc, p) => {
                 if ((p.consignorName || '').toLowerCase() === consignorName.toLowerCase()) {
                     return acc + (p.amount || 0);
                 }
@@ -2372,9 +2382,6 @@ function doGet(e) {
                 return;
             }
 
-            // Hitung ulang sisa hak penitip saat ini (bukan pakai nilai modal yang
-            // mungkin sudah basi) untuk mencegah setoran melebihi hak penitip,
-            // yang bisa membuat Estimasi Kas menjadi minus/tidak wajar.
             const remainingOwedNow = getRemainingOwed(consignorName);
             if (amount > remainingOwedNow + 0.01) {
                 const ok = confirm(
@@ -2385,34 +2392,28 @@ function doGet(e) {
 
             if (!appData.payouts) appData.payouts = [];
 
-            appData.payouts.push({
+            appData.payouts.push(touchItem({
                 id: generateId(),
                 date: getChosenDateISO('input-payout-tanggal'),
                 consignorName,
                 amount,
                 notes
-            });
+            }));
 
             saveData();
             closeModal('modal-penyerahan-uang');
             showToast("Penyerahan Uang Berhasil Dicatat");
         }
 
-        function deletePayout(id) {
-            if (!confirm("Yakin ingin menghapus catatan setoran ini?")) return;
-            appData.payouts = (appData.payouts || []).filter(p => p.id !== id);
-            saveData();
-            showToast("Catatan Setoran Dihapus");
-        }
-
         function renderExpenseHistory() {
             const opContainer = document.getElementById('op-expense-list');
             if (opContainer) {
                 opContainer.innerHTML = '';
-                if ((appData.expensesOp || []).length === 0) {
+                const expensesOpActive = getActiveExpensesOp();
+                if (expensesOpActive.length === 0) {
                     opContainer.innerHTML = `<p class="text-center text-xs text-slate-400 py-3">Belum ada pengeluaran operasional.</p>`;
                 } else {
-                    [...appData.expensesOp].reverse().forEach(e => {
+                    [...expensesOpActive].reverse().forEach(e => {
                         const dStr = new Date(e.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
                         const div = document.createElement('div');
                         div.className = "pt-2 pb-1 flex justify-between items-center text-xs";
@@ -2434,10 +2435,11 @@ function doGet(e) {
             const stockContainer = document.getElementById('stock-expense-list');
             if (stockContainer) {
                 stockContainer.innerHTML = '';
-                if ((appData.expensesStock || []).length === 0) {
+                const expensesStockActive = getActiveExpensesStock();
+                if (expensesStockActive.length === 0) {
                     stockContainer.innerHTML = `<p class="text-center text-xs text-slate-400 py-3">Belum ada riwayat penambahan stok.</p>`;
                 } else {
-                    [...appData.expensesStock].reverse().forEach(e => {
+                    [...expensesStockActive].reverse().forEach(e => {
                         const dStr = new Date(e.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
                         const div = document.createElement('div');
                         div.className = "pt-2 pb-1 flex justify-between items-center text-xs";
@@ -2467,7 +2469,7 @@ function doGet(e) {
                 tglInput.value = new Date().toISOString().slice(0, 10);
             }
 
-            const ownItems = appData.items.filter(item => !item.isConsignment);
+            const ownItems = getActiveItems().filter(item => !item.isConsignment);
 
             if (ownItems.length === 0) {
                 container.innerHTML = `<p class="text-center text-xs text-slate-400 py-4">Belum ada barang milik sendiri terdaftar.</p>`;
@@ -2492,7 +2494,7 @@ function doGet(e) {
         }
 
         function processSalesOpname() {
-            const ownItems = appData.items.filter(item => !item.isConsignment);
+            const ownItems = getActiveItems().filter(item => !item.isConsignment);
             if (ownItems.length === 0) {
                 showToast("Tidak ada barang milik sendiri untuk dihitung!");
                 return;
@@ -2541,14 +2543,12 @@ function doGet(e) {
 
             if (hasError) return;
 
-            // Sama seperti opname titipan: jangan simpan riwayat kosong kalau
-            // tidak ada barang yang benar-benar terjual (misal double-submit).
             if (details.length === 0) {
                 showToast("Tidak ada barang yang terjual untuk diproses.");
                 return;
             }
 
-            appData.salesHistory.push({
+            appData.salesHistory.push(touchItem({
                 id: generateId(),
                 date: getChosenDateISO('sales-closing-tanggal'),
                 totalSales: totalGrossSales,
@@ -2556,7 +2556,7 @@ function doGet(e) {
                 itemCount: totalItemsSold,
                 isTitipanSession: false,
                 details: details
-            });
+            }));
 
             const tglInputReset2 = document.getElementById('sales-closing-tanggal');
             if (tglInputReset2) tglInputReset2.value = '';
@@ -2570,7 +2570,7 @@ function doGet(e) {
             if (!container) return;
             container.innerHTML = '';
 
-            const ownSales = (appData.salesHistory || []).filter(s => !s.isTitipanSession);
+            const ownSales = getActiveSalesHistory().filter(s => !s.isTitipanSession);
 
             if (ownSales.length === 0) {
                 container.innerHTML = `<p class="text-center text-xs text-slate-400 py-4">Belum ada riwayat penjualan barang sendiri.</p>`;
@@ -2638,24 +2638,17 @@ function doGet(e) {
 
             if (!appData.otherIncome) appData.otherIncome = [];
 
-            appData.otherIncome.push({
+            appData.otherIncome.push(touchItem({
                 id: generateId(),
                 date: getChosenDateISO('input-lain-tanggal'),
                 sumber,
                 keterangan,
                 amount: nominal
-            });
+            }));
 
             saveData();
             closeModal('modal-pemasukan-lain');
             showToast("Pemasukan Lain-lain Berhasil Dicatat");
-        }
-
-        function deleteIncomeLain(id) {
-            if (!confirm("Yakin ingin menghapus catatan pemasukan ini?")) return;
-            appData.otherIncome = (appData.otherIncome || []).filter(o => o.id !== id);
-            saveData();
-            showToast("Catatan Pemasukan Dihapus");
         }
 
         function renderOtherIncomeList() {
@@ -2663,7 +2656,7 @@ function doGet(e) {
             if (!container) return;
             container.innerHTML = '';
 
-            const list = appData.otherIncome || [];
+            const list = getActiveOtherIncome();
             if (list.length === 0) {
                 container.innerHTML = `<p class="text-center text-xs text-slate-400 py-3">Belum ada pemasukan lain-lain tercatat.</p>`;
                 return;
@@ -2708,7 +2701,7 @@ function doGet(e) {
             const presetContainer = document.getElementById('container-preset-titipan');
             if (type === 'titipan') {
                 container.classList.remove('hidden');
-                if (presetContainer && appData.masterTitipan && appData.masterTitipan.length > 0) {
+                if (presetContainer && getActiveMasterTitipan().length > 0) {
                     presetContainer.classList.remove('hidden');
                 } else if (presetContainer) {
                     presetContainer.classList.add('hidden');
@@ -2723,7 +2716,7 @@ function doGet(e) {
             const select = document.getElementById('select-preset-titipan');
             if (!select || !select.value) return;
 
-            const master = (appData.masterTitipan || []).find(m => m.id === select.value);
+            const master = getActiveMasterTitipan().find(m => m.id === select.value);
             if (!master) return;
 
             document.getElementById('input-nama-barang').value = master.name;
@@ -2747,7 +2740,7 @@ function doGet(e) {
             const presetSelect = document.getElementById('select-preset-titipan');
             if (presetSelect) {
                 presetSelect.innerHTML = '<option value="">-- Ketik Baru / Pilih Langganan --</option>';
-                (appData.masterTitipan || []).forEach(m => {
+                getActiveMasterTitipan().forEach(m => {
                     const opt = document.createElement('option');
                     opt.value = m.id;
                     opt.innerText = `${m.name} (${m.consignorName})`;
@@ -2761,7 +2754,7 @@ function doGet(e) {
         }
 
         function openModalEditBarang(id) {
-            const item = appData.items.find(i => i.id === id);
+            const item = getActiveItems().find(i => i.id === id);
             if (!item) {
                 showToast("Barang tidak ditemukan!");
                 return;
@@ -2775,7 +2768,7 @@ function doGet(e) {
         }
 
         function openModalEditBarangUnlocked(id) {
-            const item = appData.items.find(i => i.id === id);
+            const item = getActiveItems().find(i => i.id === id);
             if (!item) {
                 showToast("Barang tidak ditemukan!");
                 return;
@@ -2789,8 +2782,6 @@ function doGet(e) {
             document.getElementById('input-stok-barang').value = item.qty;
             document.getElementById('input-harga-barang').value = item.price;
 
-            // Jenis kepemilikan dikunci saat edit: mengubah dari Sendiri <-> Titipan
-            // bisa membuat riwayat penjualan & rekap penitip lama jadi tidak konsisten.
             document.getElementById('input-jenis-barang').disabled = true;
 
             const presetContainer = document.getElementById('container-preset-titipan');
@@ -2870,15 +2861,6 @@ function doGet(e) {
             deleteItemUnlocked(id);
         }
 
-        function deleteItemUnlocked(id) {
-            const item = appData.items.find(i => i.id === id);
-            const label = item ? item.name : 'barang ini';
-            if (!confirm(`Yakin ingin menghapus "${label}"? Data stok ini tidak bisa dikembalikan.`)) return;
-            appData.items = appData.items.filter(i => i.id !== id);
-            saveData();
-            showToast("Barang Berhasil Dihapus");
-        }
-
         function openModalPengeluaranOp() {
             document.getElementById('input-op-kegiatan').value = '';
             document.getElementById('input-op-uraian').value = '';
@@ -2899,31 +2881,24 @@ function doGet(e) {
 
             if (!appData.expensesOp) appData.expensesOp = [];
 
-            appData.expensesOp.push({
+            appData.expensesOp.push(touchItem({
                 id: generateId(),
                 date: getChosenDateISO('input-op-tanggal'),
                 kegiatan,
                 uraian,
                 nominal
-            });
+            }));
 
             saveData();
             closeModal('modal-pengeluaran-op');
             showToast("Pengeluaran Operasional Dicatat");
         }
 
-        function deleteExpenseOp(id) {
-            if (!confirm("Yakin ingin menghapus catatan pengeluaran operasional ini?")) return;
-            appData.expensesOp = appData.expensesOp.filter(e => e.id !== id);
-            saveData();
-            showToast("Pengeluaran Operasional Dihapus");
-        }
-
         function openModalRestok() {
             const select = document.getElementById('select-restok-barang');
             select.innerHTML = '<option value="NEW">+ Tambah Jenis Barang Baru (Milik Sendiri)</option>';
             
-            appData.items.filter(item => !item.isConsignment).forEach(item => {
+            getActiveItems().filter(item => !item.isConsignment).forEach(item => {
                 const opt = document.createElement('option');
                 opt.value = item.id;
                 opt.innerText = `${item.code} - ${item.name}`;
@@ -2984,7 +2959,7 @@ function doGet(e) {
                     consignorName: ''
                 }));
             } else {
-                const existing = appData.items.find(i => i.id === selectedVal);
+                const existing = getActiveItems().find(i => i.id === selectedVal);
                 if (existing) {
                     existing.qty += qty;
                     touchItem(existing);
@@ -2995,26 +2970,20 @@ function doGet(e) {
 
             if (!appData.expensesStock) appData.expensesStock = [];
 
-            appData.expensesStock.push({
+            appData.expensesStock.push(touchItem({
                 id: generateId(),
                 date: getChosenDateISO('input-restok-tanggal'),
                 code,
                 name,
                 qty,
                 totalCost
-            });
+            }));
 
             saveData();
             closeModal('modal-restok');
             showToast("Penambahan Stok Berhasil Dicatat");
         }
 
-        function deleteExpenseStock(id) {
-            if (!confirm("Yakin ingin menghapus catatan restok ini? Stok barang tidak akan otomatis dikurangi.")) return;
-            appData.expensesStock = appData.expensesStock.filter(e => e.id !== id);
-            saveData();
-            showToast("Catatan Restok Dihapus");
-        }
 
         function saveSchoolNameSetting() {
             const val = document.getElementById('setting-school-name').value.trim();
@@ -3037,10 +3006,6 @@ function doGet(e) {
             saveData();
             showToast("URL Google Apps Script Disimpan");
 
-            // Kalau URL ini baru diisi/diganti (misal buka dari HP/browser lain lalu
-            // menyambungkan ke spreadsheet yang sama), cek dulu isi spreadsheet-nya
-            // sebelum auto-sync diizinkan jalan. Ini mencegah data kosong/contoh di
-            // perangkat baru diam-diam menimpa data asli yang sudah ada di Sheets.
             if (isNewOrChangedUrl) {
                 checkRemoteBeforeFirstSync();
             }
@@ -3065,9 +3030,7 @@ function doGet(e) {
                 if (finished) return;
                 finished = true;
                 cleanup();
-                // Gagal cek (mungkin Apps Script belum di-deploy ulang dengan doGet
-                // versi baru). Jangan blokir pengguna - lanjut seperti biasa.
-                console.warn("Pengecekan data Spreadsheet gagal/timeout, auto-sync tetap berjalan normal.");
+                console.warn("Pengecekan data Spreadsheet gagal/timeout, lanjut seperti biasa.");
             }, 12000);
 
             window[callbackName] = function(remoteData) {
@@ -3080,29 +3043,17 @@ function doGet(e) {
                 const localHasData = appData.items && appData.items.length > 0;
 
                 if (remoteHasData && localHasData) {
-                    // Berpotensi konflik: spreadsheet DAN perangkat ini sama-sama
-                    // sudah punya data. Matikan auto-sync sementara supaya tidak ada
-                    // yang tertimpa diam-diam, lalu minta pengguna memutuskan sendiri.
-                    appData.autoSyncEnabled = false;
-                    persistSilently();
-                    renderAll();
-
                     const tarik = confirm(
                         `PERHATIAN: Spreadsheet ini sudah berisi data (${remoteData.items.length} barang), dan HP/browser ini juga sudah punya data (${appData.items.length} barang).\n\n` +
-                        `Auto-Sync SEMENTARA DIMATIKAN supaya tidak ada data yang tertimpa tanpa sengaja.\n\n` +
                         `Tekan OK untuk TARIK data dari Spreadsheet ke HP ini (data di HP ini akan diganti).\n` +
-                        `Tekan Batal untuk membiarkan data di HP ini apa adanya (aktifkan Auto-Sync manual nanti kalau sudah yakin HP ini yang jadi sumber data).`
+                        `Tekan Batal untuk membiarkan data di HP ini apa adanya (kamu bisa gabungkan lewat "Sync Sheets" nanti kalau memang mau digabung).`
                     );
 
                     if (tarik) {
                         applyRemotePulledData(remoteData);
-                        showToast("Data ditarik dari Spreadsheet. Auto-Sync masih nonaktif, aktifkan lagi di Pengaturan kalau sudah siap.");
-                    } else {
-                        showToast("Auto-Sync dimatikan sementara. Aktifkan manual di Pengaturan kalau HP ini yang mau jadi sumber data.");
+                        showToast("Data ditarik dari Spreadsheet.");
                     }
                 }
-                // Kalau cuma salah satu sisi yang punya data (atau dua-duanya kosong),
-                // aman untuk lanjut seperti biasa tanpa perlu campur tangan pengguna.
             };
 
             const separator = appData.sheetUrl.includes('?') ? '&' : '?';
@@ -3112,7 +3063,7 @@ function doGet(e) {
                 finished = true;
                 clearTimeout(timeoutId);
                 cleanup();
-                console.warn("Pengecekan data Spreadsheet gagal, auto-sync tetap berjalan normal.");
+                console.warn("Pengecekan data Spreadsheet gagal, lanjut seperti biasa.");
             };
             document.body.appendChild(script);
         }
@@ -3121,11 +3072,8 @@ function doGet(e) {
             openModal('modal-guide');
         }
 
-        // ===================== SYNC-MERGE (gabung data, bukan timpa) =====================
+        // ===================== SYNC-MERGE (TOMBSTONE MERGE) =====================
 
-        // Ambil data mentah dari Spreadsheet via elemen script dinamis (JSONP),
-        // dibungkus Promise. Resolve dengan null kalau gagal/timeout/offline -
-        // supaya pemanggilnya bisa fallback ke kirim biasa tanpa nge-crash.
         function pullRemoteDataAsync(timeoutMs) {
             return new Promise((resolve) => {
                 if (!appData.sheetUrl || !navigator.onLine) {
@@ -3174,25 +3122,8 @@ function doGet(e) {
             });
         }
 
-        // Gabung dua daftar transaksi (log, tidak pernah diedit setelah dibuat)
-        // berdasarkan id unik. Aman untuk salesHistory, expensesOp, expensesStock,
-        // payouts, otherIncome.
-        // CATATAN KETERBATASAN: kalau sebuah entri dihapus di satu perangkat
-        // sebelum sempat sinkron, sementara perangkat lain belum tahu soal
-        // penghapusan itu, entri itu bisa "muncul lagi" setelah digabung. Ini
-        // batasan wajar dari penggabungan sederhana berbasis id (tanpa jejak
-        // riwayat hapus/tombstone). Kalau itu terjadi, tinggal hapus lagi saja.
-        function mergeLogsById(remoteArr, localArr) {
-            const map = new Map();
-            (remoteArr || []).forEach(r => { if (r && r.id) map.set(r.id, r); });
-            (localArr || []).forEach(l => { if (l && l.id) map.set(l.id, l); });
-            return Array.from(map.values());
-        }
-
-        // Gabung dua daftar "keadaan saat ini" (barang, master titipan) yang bisa
-        // diedit berulang. Kalau id yang sama ada di dua sisi dengan isi berbeda,
-        // menangkan versi dengan updatedAt paling baru.
-        function mergeStateById(remoteArr, localArr) {
+        // Fungsi menggabungkan List berdasarkan Timestamp. (Tombstone Preserving)
+        function mergeByIdAndTimestamp(remoteArr, localArr) {
             const map = new Map();
             (remoteArr || []).forEach(r => { if (r && r.id) map.set(r.id, r); });
             (localArr || []).forEach(l => {
@@ -3204,31 +3135,59 @@ function doGet(e) {
                 }
                 const localTime = l.updatedAt ? new Date(l.updatedAt).getTime() : 0;
                 const remoteTime = existing.updatedAt ? new Date(existing.updatedAt).getTime() : 0;
+                // Jika versi lokal lebih baru atau sama rentang waktunya, local menang (termasuk status deleted-nya)
                 map.set(l.id, localTime >= remoteTime ? l : existing);
             });
             return Array.from(map.values());
         }
 
-        // Gabungkan data remote (dari Spreadsheet) dengan data lokal. Pengaturan
-        // (modal kas, persen komisi, URL, saklar auto-sync) mengikuti versi HP
-        // ini - karena angka tunggal seperti itu tidak punya cara "digabung"
-        // yang masuk akal, beda dengan daftar transaksi.
         function mergeRemoteAndLocal(remote, local) {
-            return {
+            // Pakai Object.assign supaya SEMUA field pengaturan lokal lain (nama
+            // sekolah, kunci Modal Awal, kode keamanan, dll) tetap terjaga -
+            // sebelumnya field-field itu bisa hilang kalau tidak disebutkan manual.
+            return Object.assign({}, local, {
                 modalKas: local.modalKas,
                 commissionRate: local.commissionRate,
                 sheetUrl: local.sheetUrl,
-                autoSyncEnabled: local.autoSyncEnabled,
-                items: mergeStateById(remote.items, local.items),
-                masterTitipan: mergeStateById(remote.masterTitipan, local.masterTitipan),
-                expensesOp: mergeLogsById(remote.expensesOp, local.expensesOp),
-                expensesStock: mergeLogsById(remote.expensesStock, local.expensesStock),
-                salesHistory: mergeLogsById(remote.salesHistory, local.salesHistory),
-                payouts: mergeLogsById(remote.payouts, local.payouts),
-                otherIncome: mergeLogsById(remote.otherIncome, local.otherIncome),
+                items: mergeByIdAndTimestamp(remote.items, local.items),
+                masterTitipan: mergeByIdAndTimestamp(remote.masterTitipan, local.masterTitipan),
+                expensesOp: mergeByIdAndTimestamp(remote.expensesOp, local.expensesOp),
+                expensesStock: mergeByIdAndTimestamp(remote.expensesStock, local.expensesStock),
+                salesHistory: mergeByIdAndTimestamp(remote.salesHistory, local.salesHistory),
+                payouts: mergeByIdAndTimestamp(remote.payouts, local.payouts),
+                otherIncome: mergeByIdAndTimestamp(remote.otherIncome, local.otherIncome),
                 pendingSync: false,
                 lastSyncDate: new Date().toISOString(),
                 lastBackupDate: local.lastBackupDate || null
+            });
+        }
+
+        // Hash sederhana (non-kriptografis) buat mendeteksi APAKAH data yang mau
+        // disinkronkan benar-benar berubah dibanding sinkronisasi terakhir yang
+        // berhasil. Tujuannya murni efisiensi (hindari kirim data yang sama
+        // berulang-ulang), bukan keamanan - makanya algoritma sederhana (djb2)
+        // sudah cukup, tidak perlu SHA/MD5 yang lebih berat.
+        function computeSyncHash(payload) {
+            const str = JSON.stringify(payload);
+            let hash = 5381;
+            for (let i = 0; i < str.length; i++) {
+                hash = ((hash << 5) + hash) + str.charCodeAt(i);
+                hash |= 0;
+            }
+            return hash.toString(36) + '_' + str.length;
+        }
+
+        function buildSyncPayload() {
+            return {
+                modal: appData.modalKas,
+                commissionRate: appData.commissionRate,
+                items: appData.items, // Kirim semuanya, termasuk tombstone (deleted: true)
+                masterTitipan: appData.masterTitipan || [],
+                expensesOp: appData.expensesOp,
+                expensesStock: appData.expensesStock,
+                salesHistory: appData.salesHistory,
+                payouts: appData.payouts || [],
+                otherIncome: appData.otherIncome || []
             };
         }
 
@@ -3242,6 +3201,18 @@ function doGet(e) {
             }
             if (syncInProgress) return false;
 
+            // Cek dulu: kalau data lokal PERSIS sama dengan sinkronisasi terakhir
+            // yang berhasil, tidak perlu kirim/ambil apa pun sama sekali - hemat
+            // kuota Apps Script & data seluler, sesuai permintaan supaya tidak boros.
+            const preHash = computeSyncHash(buildSyncPayload());
+            if (preHash === appData.lastSyncedHash) {
+                appData.pendingSync = false;
+                persistSilently();
+                updateSyncStatusUI();
+                if (!silent) showToast("Tidak ada perubahan baru untuk disinkronkan.");
+                return true;
+            }
+
             syncInProgress = true;
             const icon = document.getElementById('sync-icon');
             if (icon) icon.classList.add('animate-spin');
@@ -3250,11 +3221,6 @@ function doGet(e) {
             let success = false;
             let didMerge = false;
             try {
-                // Ambil dulu data terbaru dari Spreadsheet untuk digabung dengan
-                // data lokal, supaya transaksi yang belum sempat ditarik (misal
-                // ditambahkan dari perangkat lain) tidak hilang tertimpa. Kalau
-                // gagal diambil (offline sesaat/timeout/belum pernah deploy
-                // doGet), lanjut kirim data lokal apa adanya seperti biasa.
                 const remote = await pullRemoteDataAsync();
                 if (remote) {
                     appData = mergeRemoteAndLocal(remote, appData);
@@ -3263,17 +3229,7 @@ function doGet(e) {
                     didMerge = true;
                 }
 
-                const payload = {
-                    modal: appData.modalKas,
-                    commissionRate: appData.commissionRate,
-                    items: appData.items,
-                    masterTitipan: appData.masterTitipan || [],
-                    expensesOp: appData.expensesOp,
-                    expensesStock: appData.expensesStock,
-                    salesHistory: appData.salesHistory,
-                    payouts: appData.payouts || [],
-                    otherIncome: appData.otherIncome || []
-                };
+                const payload = buildSyncPayload();
 
                 await fetch(appData.sheetUrl, {
                     method: 'POST',
@@ -3282,19 +3238,15 @@ function doGet(e) {
                     body: JSON.stringify(payload)
                 });
 
-                // Catatan: mode 'no-cors' membuat kita tidak bisa membaca status
-                // respons sebenarnya (opaque response). fetch tetap resolve selama
-                // requestnya terkirim ke jaringan; kegagalan jaringan/offline akan
-                // masuk ke catch di bawah.
                 appData.pendingSync = false;
                 appData.lastSyncDate = new Date().toISOString();
-                firstDirtyAt = null;
+                appData.lastSyncedHash = computeSyncHash(payload);
                 persistSilently();
 
                 if (!silent) showToast(didMerge ? "Sync & Gabung Data Berhasil!" : "Sync ke Spreadsheets terkirim!");
                 success = true;
             } catch (err) {
-                console.warn("Sync gagal (akan dicoba lagi otomatis nanti):", err);
+                console.warn("Sync gagal:", err);
                 if (!silent) showToast("Gagal Sync ke Spreadsheet!");
                 success = false;
             } finally {
@@ -3306,26 +3258,15 @@ function doGet(e) {
         }
 
         function syncToGoogleSheets() {
-            // Tombol manual: selalu beri feedback toast ke pengguna.
             performSync(false);
         }
 
-        function saveAutoSyncSetting() {
-            const checked = document.getElementById('setting-autosync-enabled').checked;
-            appData.autoSyncEnabled = checked;
-            saveData();
-            showToast(checked ? "Auto-Sync Diaktifkan" : "Auto-Sync Dinonaktifkan");
-            if (checked) attemptAutoSync();
-        }
-
-        // Terapkan data yang ditarik dari Spreadsheet ke appData lokal.
-        // Dipakai bersama oleh pullFromSheets() dan checkRemoteBeforeFirstSync().
         function applyRemotePulledData(data) {
-            appData = {
+            // Pertahankan SEMUA pengaturan lokal (bukan cuma sebagian) - hanya
+            // data transaksi & modal yang ditimpa dari versi yang ditarik.
+            appData = Object.assign({}, appData, {
                 modalKas: data.modal || 0,
                 commissionRate: data.commissionRate ?? 10,
-                sheetUrl: appData.sheetUrl,
-                autoSyncEnabled: appData.autoSyncEnabled,
                 items: data.items || [],
                 masterTitipan: data.masterTitipan || [],
                 expensesOp: data.expensesOp || [],
@@ -3334,19 +3275,57 @@ function doGet(e) {
                 payouts: data.payouts || [],
                 otherIncome: data.otherIncome || [],
                 pendingSync: false,
-                lastSyncDate: new Date().toISOString(),
-                lastBackupDate: appData.lastBackupDate || null
-            };
+                lastSyncDate: new Date().toISOString()
+            });
             persistSilently();
             renderAll();
         }
 
-        // ===================== TARIK DATA DARI SPREADSHEET =====================
-        // Dipanggil lewat elemen "script" dinamis (gaya JSONP), bukan fetch(),
-        // supaya tidak terhalang kebijakan CORS browser saat mengambil (GET)
-        // dari Apps Script. Ini konsisten dengan doGet() di kode Apps Script
-        // pada panduan.
-        function pullFromSheets() {
+        // Helper generik: ambil data dari Apps Script lewat elemen script dinamis
+        // (JSONP), dibungkus Promise. urlSuffix contoh: '?action=listVersions'.
+        function fetchViaJsonp(urlSuffix, timeoutMs) {
+            return new Promise((resolve, reject) => {
+                if (!appData.sheetUrl) {
+                    reject(new Error('URL belum diatur'));
+                    return;
+                }
+                const callbackName = 'ekantinJsonp_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+                let finished = false;
+                const script = document.createElement('script');
+                const cleanup = () => {
+                    delete window[callbackName];
+                    if (script.parentNode) script.parentNode.removeChild(script);
+                };
+                const timeoutId = setTimeout(() => {
+                    if (finished) return;
+                    finished = true;
+                    cleanup();
+                    reject(new Error('Timeout'));
+                }, timeoutMs || 15000);
+
+                window[callbackName] = function(data) {
+                    if (finished) return;
+                    finished = true;
+                    clearTimeout(timeoutId);
+                    cleanup();
+                    resolve(data);
+                };
+                script.onerror = () => {
+                    if (finished) return;
+                    finished = true;
+                    clearTimeout(timeoutId);
+                    cleanup();
+                    reject(new Error('Gagal memuat'));
+                };
+
+                const base = appData.sheetUrl + (appData.sheetUrl.includes('?') ? '&' : '?');
+                script.src = base + urlSuffix.replace(/^\?/, '') + '&callback=' + callbackName;
+                document.body.appendChild(script);
+            });
+        }
+
+        // ===================== TARIK DATA DARI SPREADSHEET (VERSI) =====================
+        async function openModalVersionHistory() {
             if (!appData.sheetUrl) {
                 showToast("URL Google Apps Script belum diatur di Pengaturan!");
                 return;
@@ -3356,56 +3335,157 @@ function doGet(e) {
                 return;
             }
 
-            const callbackName = 'ekantinPullCallback_' + Date.now();
-            let finished = false;
-            let timeoutId = null;
+            const listContainer = document.getElementById('version-history-list');
+            listContainer.innerHTML = `<p class="text-center text-xs text-slate-400 py-6">Memuat daftar versi...</p>`;
+            openModal('modal-version-history');
 
-            const cleanup = () => {
-                delete window[callbackName];
-                if (script.parentNode) script.parentNode.removeChild(script);
-            };
-
-            const script = document.createElement('script');
-
-            window[callbackName] = function(data) {
-                if (finished) return;
-                finished = true;
-                clearTimeout(timeoutId);
-                cleanup();
-
-                if (!data || typeof data !== 'object' || !Array.isArray(data.items)) {
-                    showToast("Data di Spreadsheet masih kosong atau tidak valid. Pastikan sudah pernah sync minimal 1x.");
+            try {
+                const versions = await fetchViaJsonp('action=listVersions');
+                if (!Array.isArray(versions) || versions.length === 0) {
+                    listContainer.innerHTML = `<p class="text-center text-xs text-slate-400 py-6">Belum ada versi tersimpan. Tekan "Sync Sheets" minimal 1x dulu.</p>`;
                     return;
                 }
 
-                const confirmMsg = `Menarik data akan MENIMPA data yang ada di aplikasi ini sekarang, dengan data terakhir dari Spreadsheet.\n\nModal Kas di Spreadsheet: ${formatRp(data.modal || 0)}\nJumlah barang: ${(data.items || []).length}\n\nLanjutkan?`;
+                listContainer.innerHTML = '';
+                versions.forEach((v, idx) => {
+                    const dateLabel = new Date(v.timestamp).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    const div = document.createElement('div');
+                    div.className = "border border-slate-200 rounded-xl p-3 flex justify-between items-center gap-2";
+                    div.innerHTML = `
+                        <div class="min-w-0">
+                            <p class="text-xs font-bold text-slate-800">${escapeHtml(dateLabel)}${idx === 0 ? ' <span class="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full font-bold ml-1">TERBARU</span>' : ''}</p>
+                            <p class="text-[11px] text-slate-500 truncate">${escapeHtml(v.summary || '')}</p>
+                        </div>
+                        <button data-pull-version-row="${v.row}" class="shrink-0 bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-semibold px-2.5 py-1.5 rounded-lg active:scale-95 transition">Tarik</button>
+                    `;
+                    listContainer.appendChild(div);
+                });
+
+                listContainer.querySelectorAll('[data-pull-version-row]').forEach(btn => {
+                    btn.addEventListener('click', () => pullSpecificVersion(parseInt(btn.getAttribute('data-pull-version-row'), 10)));
+                });
+            } catch (err) {
+                listContainer.innerHTML = `<p class="text-center text-xs text-red-500 py-6">Gagal memuat daftar versi. Cek koneksi, atau pastikan Apps Script sudah di-deploy ulang dengan kode terbaru.</p>`;
+            }
+        }
+
+        async function pullSpecificVersion(row) {
+            try {
+                const data = await fetchViaJsonp(`action=getVersion&row=${row}`);
+                if (!data || typeof data !== 'object' || !Array.isArray(data.items)) {
+                    showToast("Versi ini tidak valid atau kosong.");
+                    return;
+                }
+                const confirmMsg = `Menarik versi ini akan MENIMPA data yang ada di aplikasi ini sekarang.\n\nModal Kas di versi ini: ${formatRp(data.modal || 0)}\nJumlah barang: ${(data.items || []).length}\n\nLanjutkan?`;
                 if (!confirm(confirmMsg)) return;
 
                 applyRemotePulledData(data);
-                showToast("Data Berhasil Ditarik dari Spreadsheet!");
-            };
-
-            timeoutId = setTimeout(() => {
-                if (finished) return;
-                finished = true;
-                cleanup();
-                showToast("Gagal mengambil data (waktu habis). Cek URL & koneksi, atau pastikan sudah deploy ulang Apps Script.");
-            }, 15000);
-
-            script.onerror = () => {
-                if (finished) return;
-                finished = true;
-                clearTimeout(timeoutId);
-                cleanup();
-                showToast("Gagal mengambil data dari Spreadsheet! Cek URL di Pengaturan.");
-            };
-
-            const separator = appData.sheetUrl.includes('?') ? '&' : '?';
-            script.src = appData.sheetUrl + separator + 'callback=' + callbackName;
-            document.body.appendChild(script);
+                closeModal('modal-version-history');
+                showToast("Versi Berhasil Ditarik ke Aplikasi!");
+            } catch (err) {
+                showToast("Gagal mengambil versi ini. Coba lagi.");
+            }
         }
 
-        function executeResetAllData() {
+        const RESET_CONFIRM_WORD = 'HAPUS';
+        const RESET_CONFIRM_WORD_WITH_SHEET = 'HAPUS SEMUA';
+
+        function openModalResetConfirm() {
+            const input = document.getElementById('input-reset-confirm-text');
+            if (input) input.value = '';
+
+            const sheetOption = document.getElementById('container-reset-sheet-option');
+            const checkbox = document.getElementById('checkbox-reset-sheet-too');
+            if (checkbox) checkbox.checked = false;
+            if (sheetOption) {
+                if (appData.sheetUrl) {
+                    sheetOption.classList.remove('hidden');
+                } else {
+                    sheetOption.classList.add('hidden');
+                }
+            }
+
+            toggleResetButtonState();
+            openModal('modal-reset-confirm');
+        }
+
+        function closeModalResetConfirm() {
+            const input = document.getElementById('input-reset-confirm-text');
+            if (input) input.value = '';
+            toggleResetButtonState();
+            closeModal('modal-reset-confirm');
+        }
+
+        function getCurrentResetConfirmWord() {
+            const checkbox = document.getElementById('checkbox-reset-sheet-too');
+            return (checkbox && checkbox.checked) ? RESET_CONFIRM_WORD_WITH_SHEET : RESET_CONFIRM_WORD;
+        }
+
+        function toggleResetButtonState() {
+            const input = document.getElementById('input-reset-confirm-text');
+            const btn = document.getElementById('btn-execute-reset');
+            const wordLabel = document.getElementById('reset-confirm-word-label');
+            if (!input || !btn) return;
+
+            const requiredWord = getCurrentResetConfirmWord();
+            if (wordLabel) wordLabel.innerText = requiredWord;
+            if (input.placeholder !== undefined) input.placeholder = `Ketik ${requiredWord} di sini`;
+
+            const isMatch = input.value.trim() === requiredWord;
+            btn.disabled = !isMatch;
+            if (isMatch) {
+                btn.classList.remove('bg-red-300', 'cursor-not-allowed');
+                btn.classList.add('bg-red-600', 'hover:bg-red-700', 'cursor-pointer');
+            } else {
+                btn.classList.add('bg-red-300', 'cursor-not-allowed');
+                btn.classList.remove('bg-red-600', 'hover:bg-red-700', 'cursor-pointer');
+            }
+        }
+
+        async function executeResetAllData() {
+            // Pengaman ganda: walau tombol seharusnya sudah disabled kalau kata
+            // konfirmasi belum cocok, tetap dicek ulang di sini supaya tidak bisa
+            // dilewati lewat cara lain (misal edit atribut disabled via DevTools).
+            const input = document.getElementById('input-reset-confirm-text');
+            const requiredWord = getCurrentResetConfirmWord();
+            if (!input || input.value.trim() !== requiredWord) {
+                showToast(`Ketik "${requiredWord}" dulu untuk konfirmasi!`);
+                return;
+            }
+
+            const checkbox = document.getElementById('checkbox-reset-sheet-too');
+            const alsoResetSheet = checkbox && checkbox.checked && appData.sheetUrl;
+
+            if (alsoResetSheet) {
+                // Ambil URL-nya SEKARANG, karena appData (termasuk sheetUrl) akan
+                // ikut terhapus begitu localStorage dibersihkan di bawah.
+                const sheetUrlBeforeReset = appData.sheetUrl;
+                showToast("Mengosongkan Spreadsheet...");
+                try {
+                    const emptyPayload = {
+                        modal: 0,
+                        commissionRate: appData.commissionRate ?? 10,
+                        items: [],
+                        masterTitipan: [],
+                        expensesOp: [],
+                        expensesStock: [],
+                        salesHistory: [],
+                        payouts: [],
+                        otherIncome: []
+                    };
+                    await fetch(sheetUrlBeforeReset, {
+                        method: 'POST',
+                        mode: 'no-cors',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(emptyPayload)
+                    });
+                } catch (e) {
+                    console.warn("Gagal mengosongkan Spreadsheet (mungkin sedang offline):", e);
+                    // Tetap lanjut reset lokal walau ini gagal - jangan sampai
+                    // kegagalan jaringan menahan reset yang memang diinginkan user.
+                }
+            }
+
             localStorage.removeItem(LOCAL_STORAGE_KEY);
             location.reload();
         }
@@ -3443,7 +3523,6 @@ function doGet(e) {
             reader.onload = function(e) {
                 try {
                     const parsed = JSON.parse(e.target.result);
-                    // Validasi minimal struktur supaya tidak menimpa data dengan file yang salah/rusak.
                     if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.items)) {
                         showToast("File backup tidak valid!");
                         return;
@@ -3467,7 +3546,7 @@ function doGet(e) {
                     console.error(err);
                     showToast("Gagal membaca file backup (format tidak valid)!");
                 } finally {
-                    event.target.value = ''; // reset input supaya file yang sama bisa dipilih ulang
+                    event.target.value = ''; 
                 }
             };
             reader.onerror = function() {
@@ -3511,8 +3590,6 @@ function doGet(e) {
             }
         }
 
-        // Bingkai HTML bersama untuk semua jenis laporan cetak - kop (nama
-        // sekolah kalau diisi di Pengaturan), judul, periode, dan tombol cetak.
         function reportShell(title, subtitle, bodyHtml) {
             const schoolHeader = appData.schoolName
                 ? `<div class="school-name">${escapeHtml(appData.schoolName)}</div>`
@@ -3554,21 +3631,17 @@ function doGet(e) {
 </html>`;
         }
 
-        // Hitung dampak kas bersih satu transaksi (dipakai buat Saldo Awal Periode
-        // di Laporan Kas Umum): penjualan (kedua jenis) & pemasukan lain = masuk;
-        // pengeluaran ops/restok/setoran = keluar.
         function buildLaporanKasUmum(dari, sampai, dariStr, sampaiStr) {
             const dateFmt = (s) => new Date(s).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
             const dateTimeFmt = (s) => new Date(s).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
             let allTxAll = [];
-            (appData.salesHistory || []).forEach(s => allTxAll.push({ date: s.date, type: s.isTitipanSession ? 'Penjualan Titipan' : 'Penjualan Sendiri', desc: `${s.itemCount} barang terjual`, masuk: s.totalSales || 0, keluar: 0 }));
-            (appData.otherIncome || []).forEach(o => allTxAll.push({ date: o.date, type: 'Pemasukan Lain-lain', desc: `${o.sumber}${o.keterangan ? ' - ' + o.keterangan : ''}`, masuk: o.amount || 0, keluar: 0 }));
-            (appData.expensesOp || []).forEach(e => allTxAll.push({ date: e.date, type: 'Pengeluaran Operasional', desc: e.kegiatan, masuk: 0, keluar: e.nominal || 0 }));
-            (appData.expensesStock || []).forEach(e => allTxAll.push({ date: e.date, type: 'Restok Barang', desc: `${e.name} (+${e.qty} pcs)`, masuk: 0, keluar: e.totalCost || 0 }));
-            (appData.payouts || []).forEach(p => allTxAll.push({ date: p.date, type: 'Setoran ke Penitip', desc: p.consignorName, masuk: 0, keluar: p.amount || 0 }));
+            getActiveSalesHistory().forEach(s => allTxAll.push({ date: s.date, type: s.isTitipanSession ? 'Penjualan Titipan' : 'Penjualan Sendiri', desc: `${s.itemCount} barang terjual`, masuk: s.totalSales || 0, keluar: 0 }));
+            getActiveOtherIncome().forEach(o => allTxAll.push({ date: o.date, type: 'Pemasukan Lain-lain', desc: `${o.sumber}${o.keterangan ? ' - ' + o.keterangan : ''}`, masuk: o.amount || 0, keluar: 0 }));
+            getActiveExpensesOp().forEach(e => allTxAll.push({ date: e.date, type: 'Pengeluaran Operasional', desc: e.kegiatan, masuk: 0, keluar: e.nominal || 0 }));
+            getActiveExpensesStock().forEach(e => allTxAll.push({ date: e.date, type: 'Restok Barang', desc: `${e.name} (+${e.qty} pcs)`, masuk: 0, keluar: e.totalCost || 0 }));
+            getActivePayouts().forEach(p => allTxAll.push({ date: p.date, type: 'Setoran ke Penitip', desc: p.consignorName, masuk: 0, keluar: p.amount || 0 }));
 
-            // Saldo Awal Periode = modal kas + dampak bersih semua transaksi SEBELUM tanggal 'dari'.
             let saldoAwal = appData.modalKas || 0;
             allTxAll.forEach(t => {
                 if (new Date(t.date) < dari) saldoAwal += (t.masuk - t.keluar);
@@ -3635,10 +3708,10 @@ function doGet(e) {
             const dateFmt = (s) => new Date(s).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
             const inRange = (d) => { const x = new Date(d); return x >= dari && x <= sampai; };
 
-            const salesInRange = (appData.salesHistory || []).filter(s => inRange(s.date));
-            const opInRange = (appData.expensesOp || []).filter(e => inRange(e.date));
-            const stockInRange = (appData.expensesStock || []).filter(e => inRange(e.date));
-            const otherIncomeInRange = (appData.otherIncome || []).filter(o => inRange(o.date));
+            const salesInRange = getActiveSalesHistory().filter(s => inRange(s.date));
+            const opInRange = getActiveExpensesOp().filter(e => inRange(e.date));
+            const stockInRange = getActiveExpensesStock().filter(e => inRange(e.date));
+            const otherIncomeInRange = getActiveOtherIncome().filter(o => inRange(o.date));
 
             let totalOwnSales = 0, totalTitipanCommission = 0;
             salesInRange.forEach(s => {
@@ -3734,7 +3807,7 @@ function doGet(e) {
             const inRange = (d) => { const x = new Date(d); return x >= dari && x <= sampai; };
 
             let salesRows = [];
-            (appData.salesHistory || []).forEach(s => {
+            getActiveSalesHistory().forEach(s => {
                 if (!s.isTitipanSession || !inRange(s.date)) return;
                 (s.details || []).forEach(d => {
                     if ((d.consignorName || '').toLowerCase() === consignorName.toLowerCase()) {
@@ -3744,7 +3817,7 @@ function doGet(e) {
             });
             salesRows.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-            const payoutsInRange = (appData.payouts || []).filter(p => (p.consignorName || '').toLowerCase() === consignorName.toLowerCase() && inRange(p.date))
+            const payoutsInRange = getActivePayouts().filter(p => (p.consignorName || '').toLowerCase() === consignorName.toLowerCase() && inRange(p.date))
                 .sort((a, b) => new Date(a.date) - new Date(b.date));
 
             let totalOmzet = 0, totalKomisi = 0;
@@ -3815,26 +3888,8 @@ function doGet(e) {
                         <div class="card"><div class="label">Selisih Periode Ini</div><div class="value" style="color:${selisihPeriode > 0 ? '#dc2626' : '#059669'};">${formatRp(selisihPeriode)}</div></div>
                         <div class="card"><div class="label">Sisa Kewajiban s.d. Sekarang (Semua Waktu)</div><div class="value" style="color:${sisaKeseluruhan > 0 ? '#dc2626' : '#059669'};">${formatRp(sisaKeseluruhan)}</div></div>
                     </div>
-                    <p class="note">*"Sisa Kewajiban s.d. Sekarang" dihitung dari seluruh riwayat (bukan cuma periode laporan ini), supaya penitip tahu posisi terkini yang sebenarnya.</p>
-                    <div class="signature">
-                        <div><div class="line">Bendahara Kantin</div></div>
-                        <div><div class="line">Penitip (${escapeHtml(consignorName)})</div></div>
-                    </div>
                 </div>
             `;
-        }
-
-        function buildLaporanTitipan(dari, sampai, dariStr, sampaiStr, consignorFilter) {
-            const dateFmt = (s) => new Date(s).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
-            let names = consignorFilter === 'ALL' ? getConsignorList() : [consignorFilter];
-
-            if (names.length === 0) {
-                return { title: 'Pertanggungjawaban Titipan', subtitle: `Periode: ${dateFmt(dariStr)} &mdash; ${dateFmt(sampaiStr)}`, body: `<p style="color:#999;">Belum ada data penitip.</p>` };
-            }
-
-            let body = names.map(name => buildLaporanTitipanForConsignor(name, dari, sampai)).join('');
-            const title = consignorFilter === 'ALL' ? 'Pertanggungjawaban Titipan (Semua Penitip)' : `Pertanggungjawaban Titipan - ${consignorFilter}`;
-            return { title, subtitle: `Periode: ${dateFmt(dariStr)} &mdash; ${dateFmt(sampaiStr)}`, body };
         }
 
         function generateLaporan() {
@@ -3843,49 +3898,61 @@ function doGet(e) {
             const sampaiStr = document.getElementById('laporan-sampai').value;
 
             if (!dariStr || !sampaiStr) {
-                showToast("Pilih rentang tanggal dulu!");
+                showToast("Tanggal awal dan akhir wajib diisi!");
                 return;
             }
 
             const dari = new Date(dariStr + 'T00:00:00');
             const sampai = new Date(sampaiStr + 'T23:59:59');
 
-            if (dari > sampai) {
-                showToast("Tanggal 'Dari' tidak boleh setelah 'Sampai'!");
-                return;
-            }
-
-            let result;
+            let rep = null;
             if (jenis === 'kas_umum') {
-                result = buildLaporanKasUmum(dari, sampai, dariStr, sampaiStr);
+                rep = buildLaporanKasUmum(dari, sampai, dariStr, sampaiStr);
             } else if (jenis === 'laba_rugi') {
-                result = buildLaporanLabaRugi(dari, sampai, dariStr, sampaiStr);
+                rep = buildLaporanLabaRugi(dari, sampai, dariStr, sampaiStr);
             } else if (jenis === 'rekap_harian') {
-                result = buildLaporanRekapHarian(dari, sampai, dariStr, sampaiStr);
+                rep = buildLaporanRekapHarian(dari, sampai, dariStr, sampaiStr);
             } else if (jenis === 'titipan') {
-                const consignorFilter = document.getElementById('laporan-consignor').value;
-                result = buildLaporanTitipan(dari, sampai, dariStr, sampaiStr, consignorFilter);
-            } else {
-                showToast("Jenis laporan tidak dikenali!");
-                return;
+                const consignor = document.getElementById('laporan-consignor').value;
+                if (!consignor) {
+                    showToast("Pilih penitip terlebih dahulu!");
+                    return;
+                }
+                
+                let bodyHtml = '';
+                if (consignor === 'ALL') {
+                    const list = getConsignorList();
+                    if (list.length === 0) {
+                        bodyHtml = `<p style="text-align:center;color:#999;padding:24px;">Belum ada penitip terdaftar.</p>`;
+                    } else {
+                        bodyHtml = list.map(c => buildLaporanTitipanForConsignor(c, dari, sampai)).join('<hr style="border:0;border-top:1px dashed #cbd5e1;margin:24px 0;">');
+                    }
+                } else {
+                    bodyHtml = buildLaporanTitipanForConsignor(consignor, dari, sampai);
+                }
+                
+                const dateFmt = (s) => new Date(s).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+                rep = {
+                    title: 'Laporan Pertanggungjawaban Titipan',
+                    subtitle: `Periode: ${dateFmt(dariStr)} &mdash; ${dateFmt(sampaiStr)}`,
+                    body: bodyHtml
+                };
             }
 
-            const reportHtml = reportShell(result.title, result.subtitle, result.body);
-
-            const win = window.open('', '_blank');
-            if (!win) {
-                showToast("Popup diblokir browser! Izinkan popup untuk melihat laporan.");
-                return;
+            if (rep) {
+                const finalHtml = reportShell(rep.title, rep.subtitle, rep.body);
+                const win = window.open('', '_blank');
+                win.document.write(finalHtml);
+                win.document.close();
+                closeModal('modal-laporan');
             }
-            win.document.write(reportHtml);
-            win.document.close();
-            closeModal('modal-laporan');
         }
 
         function openModal(id) {
             const el = document.getElementById(id);
             if (el) el.classList.remove('hidden');
         }
+
         function closeModal(id) {
             const el = document.getElementById(id);
             if (el) el.classList.add('hidden');
@@ -3911,14 +3978,10 @@ function doGet(e) {
             initData();
         };
 
-        // Daftarkan Service Worker supaya aplikasi bisa di-install (Add to Home
-        // Screen / Install App) dan tetap bisa dibuka saat offline.
-        // File sw.js, manifest.json, icon-192.png, dan icon-512.png harus berada
-        // di folder yang sama dengan index.html ini saat di-hosting.
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('sw.js').catch((err) => {
-                    console.warn('Service Worker gagal didaftarkan (aplikasi tetap bisa dipakai seperti biasa):', err);
+                    console.warn('Service Worker gagal didaftarkan:', err);
                 });
             });
         }
